@@ -162,3 +162,29 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
   - Added automated symlink creation for `keystore.mt8765.so` and `keystore.default.so` in `on fs`.
   - Added `setenv LD_LIBRARY_PATH /vendor/lib64:/vendor/lib64/hw:/system/lib64/vndk-28:/system/lib64:/system/lib64/vndk-sp-28` to `service keymaster-3-0`.
   - Added `interface android.hardware.keymaster@3.0::IKeymasterDevice default` declaration to ensure automatic HAL discovery.
+  - Pushed to `main` in commit [`d4206c9`](https://github.com/AyushS003/tb7305x-lab/commit/d4206c9).
+
+---
+
+## 7. Final Physical Verification ([Run #39603562014](https://github.com/AyushS003/tb7305x-lab/actions/runs/39603562014))
+
+1. **Preflight Checks**:
+   - Image: [`builds/recovery-crypto.img`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/builds/recovery-crypto.img) (23,363,584 bytes, SHA-256 `C484651960BD4C01AF20466293DF8C858EA0E2D36D8F872C03A3BBD866A17DA9`).
+   - Fits physical recovery partition limit (25,165,824 B) with **+1,802,240 B (+1.72 MiB)** safety margin.
+   - Hash 100% matched CI artifact from Run #39603562014.
+2. **Flash & Direct Recovery Boot**:
+   - Target verified: `Lenovo TB-7305X` (`HA154H1C`).
+   - Flashed ONLY recovery partition via fastboot (`Sending 'recovery' (22816 KB) OKAY`, `Writing 'recovery' OKAY [0.586s]`).
+   - Rebooted into recovery mode and verified `HA154H1C recovery` on ADB.
+3. **Keymaster & TEE Service Verification**:
+   - `ro.twrp.version = 3.7.0_9-ragebreaker`
+   - `lshal | grep -i keymaster` confirmed `android.hardware.keymaster@3.0::IKeymasterDevice/default` registered at PID 387.
+   - TrustZone hardware TEE signed keymaster RSA blob and upgraded key.
+4. **End-to-End Decryption Confirmed**:
+   - PIN submitted in TWRP GUI Mount -> Decrypt Data.
+   - Device mapper created `/dev/block/dm-0`.
+   - `/data` mounted on `/dev/block/dm-0` (`ext4`, `rw`).
+   - `/sdcard` mounted on `/data/media/0`.
+   - Confirmed live access to `/data/app`, `/data/data`, `/data/media/0` (`DCIM`, `Download`, `Pictures`, etc.).
+   - TWRP recovery log recorded: `operation_end - status=0`.
+
