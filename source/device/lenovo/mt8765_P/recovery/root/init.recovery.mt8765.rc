@@ -38,6 +38,12 @@ on fs
     rmdir /system
     symlink /system_root/system /system
 
+    # Keystore HAL hardware module symlinks for MT8765 (MT6739 compatible)
+    symlink /vendor/lib64/hw/keystore.mt6739.so /vendor/lib64/hw/keystore.mt8765.so
+    symlink /vendor/lib64/hw/keystore.mt6739.so /vendor/lib64/hw/keystore.default.so
+    symlink /vendor/lib/hw/keystore.mt6739.so /vendor/lib/hw/keystore.mt8765.so
+    symlink /vendor/lib/hw/keystore.mt6739.so /vendor/lib/hw/keystore.default.so
+
     # Microtrust TEE driver permissions
     chmod 0660 /dev/teei_loader
     chmod 0660 /dev/teei_fp
@@ -167,8 +173,10 @@ service hwservicemanager /system/bin/hwservicemanager
     seclabel u:r:recovery:s0
 
 service keymaster-3-0 /vendor/bin/hw/android.hardware.keymaster@3.0-service
+    interface android.hardware.keymaster@3.0::IKeymasterDevice default
     user root
     group root drmrpc
+    setenv LD_LIBRARY_PATH /vendor/lib64:/vendor/lib64/hw:/system/lib64/vndk-28:/system/lib64:/system/lib64/vndk-sp-28
     disabled
     seclabel u:r:recovery:s0
 

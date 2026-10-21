@@ -108,9 +108,56 @@
 
 ---
 
-## 4. Current Status & Next Actions
+## 4. Physical Flash & Live Execution
 
-1. **Running Recovery Intact**: Live recovery partition running TWRP 3.7.0 (`builds/recovery.img`, 24,174,592 bytes, SHA-256 `0B6640B4...`) is kept completely intact and functional.
-2. **Candidate Crypto Image Isolated**: New image saved separately to [`builds/recovery-crypto.img`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/builds/recovery-crypto.img) (23,363,584 bytes, SHA-256 `D8253BF3...`).
-3. **Non-Destructive Constraint Maintained**: Zero flash writes performed without explicit authorization. Userdata completely unmodified.
-4. **Awaiting User Flashing Approval**: Awaiting explicit user confirmation before flashing candidate `recovery-crypto.img` to physical recovery partition.
+1. **Candidate Image Flashed**: User approved flashing [`builds/recovery-crypto.img`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/builds/recovery-crypto.img) (23,363,584 bytes, SHA-256 `D8253BF3...`) to the physical recovery partition (`/dev/block/platform/bootdevice/by-name/recovery`).
+2. **Boot Verified**: Device booted cleanly into TWRP 3.7.0 (`omni_mt8765_P-eng 16.1.0 PQ2A.190405.003 test-keys`).
+3. **Crypto Detection**: TWRP automatically detected the encrypted `/data` block partition (`ro.crypto.type=block`, `ro.crypto.state=encrypted`) via `/dev/block/platform/bootdevice/by-name/metadata` (`0xD0B5B1C4` magic, `KDF_SCRYPT_KEYMASTER`).
+4. **USB / ADB Interface**: ADB connection established (`HA154H1C recovery`, USB VID:PID `18D1:D001`).
+
+---
+
+## 5. Live Diagnostics & Working FDE Decryption Breakthrough
+
+### Diagnostic Root Cause
+Live analysis via root ADB shell and `logcat` revealed two critical blockers in the vendor HAL execution chain:
+1. **Dynamic Linker VNDK Path**:
+   `android.hardware.keymaster@3.0-service` failed to dlopen `android.hardware.keymaster@3.0-impl.so` because `libpuresoftkeymasterdevice.so` is located in `/system/lib64/vndk-28`, which was not in default recovery `LD_LIBRARY_PATH`.
+2. **SoC Hardware Naming Mismatch**:
+   Android's HAL loader `hw_get_module("keystore", ...)` searches for `keystore.<ro.hardware>.so`. The tablet reports `ro.hardware = mt8765`. However, MediaTek's proprietary TrustZone Keymaster blob is named `keystore.mt6739.so`. Because no `keystore.mt8765.so` existed, the service fell back to software-only implementation and failed to load TrustZone.
+
+### Live Solution & Verification
+1. **Module Symlinks Created**:
+   - `/vendor/lib64/hw/keystore.mt8765.so -> /vendor/lib64/hw/keystore.mt6739.so`
+   - `/vendor/lib64/hw/keystore.default.so -> /vendor/lib64/hw/keystore.mt6739.so`
+   - `/vendor/lib/hw/keystore.mt8765.so -> /vendor/lib/hw/keystore.mt6739.so`
+   - `/vendor/lib/hw/keystore.default.so -> /vendor/lib/hw/keystore.mt6739.so`
+2. **Hardware Keymaster Activated**:
+   Started `android.hardware.keymaster@3.0-service` with `LD_LIBRARY_PATH=/vendor/lib64:/vendor/lib64/hw:/system/lib64/vndk-28:/system/lib64:/system/lib64/vndk-sp-28`.
+   - Logcat confirmed: `I TrustyKeymaster: Creating device`
+   - Service registered with `hwservicemanager`
+3. **TrustZone Hardware Cryptographic Handshake**:
+   - `libcryptfsfde` queried Keymaster HAL via Binder.
+   - Microtrust / TrustZone TEE successfully signed the RSA keymaster blob from the metadata partition.
+   - Device mapper created `/dev/block/dm-0`:
+     `I:Creating crypto dev "userdata"; cipher=aes-cbc-essiv:sha256, keysize=16, real_dev=/dev/block/platform/bootdevice/by-name/userdata, len=26235354624`
+     `I:ioctl err: 0`
+4. **Decryption Succeeded**:
+   - User submitted PIN via TWRP GUI Mount -> Decrypt Data.
+   - Console: `Data successfully decrypted`.
+   - Verified active mounts:
+     - `/dev/block/dm-0 on /data type ext4 (rw,seclabel,relatime,resuid=10010,resgid=1065,data=ordered)`
+     - `/dev/block/dm-0 on /sdcard type ext4 (rw,seclabel,relatime,resuid=10010,resgid=1065,data=ordered)`
+   - Verified decrypted contents:
+     - Full `/data` hierarchy accessible (`/data/app`, `/data/data`, `/data/system`, etc.).
+     - User internal storage accessible (`/data/media/0`: `DCIM`, `Download`, `Pictures`, `Music`, etc.).
+     - TWRP File Manager fully operational across internal storage.
+
+---
+
+## 6. Permanent Device Tree Integration
+
+- Updated [`source/device/lenovo/mt8765_P/recovery/root/init.recovery.mt8765.rc`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/device/lenovo/mt8765_P/recovery/root/init.recovery.mt8765.rc):
+  - Added automated symlink creation for `keystore.mt8765.so` and `keystore.default.so` in `on fs`.
+  - Added `setenv LD_LIBRARY_PATH /vendor/lib64:/vendor/lib64/hw:/system/lib64/vndk-28:/system/lib64:/system/lib64/vndk-sp-28` to `service keymaster-3-0`.
+  - Added `interface android.hardware.keymaster@3.0::IKeymasterDevice default` declaration to ensure automatic HAL discovery.
