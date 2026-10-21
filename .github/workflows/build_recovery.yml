@@ -93,9 +93,7 @@ jobs:
             libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc \
             zip zlib1g-dev python2 python3
           
-          # Ensure python points to python2 for Android 9 build tools
-          sudo ln -sf /usr/bin/python2 /usr/bin/python
-          python --version
+          python3 --version
           java -version
 
       - name: 7. Install Google Repo Tool
@@ -155,6 +153,12 @@ jobs:
       - name: 11. Compile TWRP Recovery Image
         run: |
           set -o pipefail
+          
+          # Force python to point to python2 for Android 9 build toolchain
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
+          echo "System python version for build:"
+          python --version
+          
           cd ~/twrp_workspace
           export LC_ALL=C
           export ALLOW_MISSING_DEPENDENCIES=true
