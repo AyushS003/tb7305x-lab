@@ -7,7 +7,7 @@ firmware/
 *.rar
 
 # Local test recovery images and unpacked ramdisks (~124 MB)
-recovery/
+/recovery/
 
 # CI / local build outputs
 artifacts/
