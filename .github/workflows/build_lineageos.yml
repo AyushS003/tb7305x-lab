@@ -1,0 +1,213 @@
+name: Build LineageOS 16.0 (Android 9 Pie)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: 'Build Target'
+        required: true
+        type: choice
+        default: 'boot_and_system'
+        options:
+          - 'boot_and_system'
+          - 'boot_only'
+          - 'system_only'
+          - 'bacon_full_zip'
+      upload_release:
+        description: 'Publish as GitHub Release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build_rom:
+    name: Build LineageOS 16.0 (${{ github.event.inputs.build_target }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Audit Runner Environment
+        run: |
+          echo "=== CPU Profile ==="
+          nproc
+          cat /proc/cpuinfo | grep "model name" | head -n 1
+          echo "=== Memory Profile ==="
+          free -h
+          echo "=== Initial Disk Space ==="
+          df -h
+
+      - name: 3. Maximize Available Disk Space (Debloat Runner)
+        run: |
+          echo "Purging unnecessary toolchains, SDKs, and container images..."
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost
+          sudo docker image prune --all --force || true
+          sudo docker builder prune --all --force || true
+          echo "=== Disk Space After Debloat ==="
+          df -h
+
+      - name: 4. Configure 12 GB Swap Space
+        run: |
+          SWAP_FILE="/mnt/build_swapfile_12g"
+          sudo swapoff -a || true
+          sudo rm -f /swapfile "${SWAP_FILE}" || true
+          sudo fallocate -l 12G "${SWAP_FILE}" || sudo dd if=/dev/zero of="${SWAP_FILE}" bs=1M count=12288
+          sudo chmod 600 "${SWAP_FILE}"
+          sudo mkswap "${SWAP_FILE}"
+          sudo swapon "${SWAP_FILE}"
+          echo "=== Active Memory & Swap ==="
+          free -h
+
+      - name: 5. Set up Java 8 Toolchain
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '8'
+
+      - name: 6. Install Android 9 Build Toolchain Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
+            git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev \
+            liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 \
+            libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc \
+            zip zlib1g-dev python2 python3
+          
+          # Force system python to python2 for AOSP 9 build system compatibility
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
+          python --version
+          java -version
+
+      - name: 7. Install Google Repo Tool
+        run: |
+          mkdir -p ~/bin
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          sudo ln -sf ~/bin/repo /usr/bin/repo
+          git config --global user.name "LineageOS-CI-Builder"
+          git config --global user.email "ci-builder@users.noreply.github.com"
+          git config --global color.ui false
+
+      - name: 8. Initialize Shallow LineageOS 16.0 Source Tree
+        run: |
+          mkdir -p ~/los_workspace
+          cd ~/los_workspace
+          repo init -u https://github.com/LineageOS/android.git -b lineage-16.0 --depth=1
+          repo sync -c --no-clone-bundle --no-tags --force-sync -j$(nproc)
+
+      - name: 9. Stage Device and Vendor Trees
+        run: |
+          cd ~/los_workspace
+          rm -rf device/lenovo/mt8765_P vendor/lenovo/mt8765_P
+          mkdir -p device/lenovo/mt8765_P vendor/lenovo/mt8765_P
+          
+          echo "Staging local device tree from $GITHUB_WORKSPACE/source/rom/device/lenovo/mt8765_P..."
+          cp -rf $GITHUB_WORKSPACE/source/rom/device/lenovo/mt8765_P/* device/lenovo/mt8765_P/
+          
+          echo "Cloning vendor tree from mlm-games/android_vendor_lenovo_mt8765_P..."
+          git clone --depth=1 https://github.com/mlm-games/android_vendor_lenovo_mt8765_P.git -b main vendor/lenovo/mt8765_P
+          
+          echo "Staged trees:"
+          ls -la device/lenovo/mt8765_P/
+          ls -la device/lenovo/mt8765_P/prebuilts/
+          ls -la vendor/lenovo/mt8765_P/
+
+      - name: 10. Snapshot Exact Build Manifest
+        run: |
+          cd ~/los_workspace
+          repo manifest -r -o pinned_build_manifest.xml
+          cp pinned_build_manifest.xml $GITHUB_WORKSPACE/
+
+      - name: 11. Compile LineageOS 16.0
+        run: |
+          set -o pipefail
+          cd ~/los_workspace
+          export LC_ALL=C
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export WITHOUT_CHECK_API=true
+          
+          source build/envsetup.sh
+          lunch lineage_mt8765_P-userdebug
+          
+          TARGET="${{ github.event.inputs.build_target || 'boot_and_system' }}"
+          echo "Starting compilation for target: $TARGET"
+          
+          if [ "$TARGET" == "boot_and_system" ]; then
+            make -j$(nproc) bootimage systemimage 2>&1 | tee $GITHUB_WORKSPACE/build.log
+          elif [ "$TARGET" == "boot_only" ]; then
+            make -j$(nproc) bootimage 2>&1 | tee $GITHUB_WORKSPACE/build.log
+          elif [ "$TARGET" == "system_only" ]; then
+            make -j$(nproc) systemimage 2>&1 | tee $GITHUB_WORKSPACE/build.log
+          elif [ "$TARGET" == "bacon_full_zip" ]; then
+            mka bacon 2>&1 | tee $GITHUB_WORKSPACE/build.log
+          fi
+
+      - name: 12. Audit Build Outputs & Validate Partition Sizing
+        run: |
+          cd ~/los_workspace/out/target/product/mt8765_P
+          mkdir -p $GITHUB_WORKSPACE/artifacts
+          
+          # Copy outputs
+          cp -f boot.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+          cp -f system.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+          cp -f vendor.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+          cp -f dtbo.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+          cp -f lineage-*.zip $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+          cp -f $GITHUB_WORKSPACE/build.log $GITHUB_WORKSPACE/artifacts/build.log
+          cp -f $GITHUB_WORKSPACE/pinned_build_manifest.xml $GITHUB_WORKSPACE/artifacts/pinned_build_manifest.xml
+          
+          cd $GITHUB_WORKSPACE/artifacts
+          
+          echo "=== PARTITION SIZE AUDIT ==="
+          # Check boot image size (limit 16,777,216 bytes)
+          if [ -f boot.img ]; then
+            BOOT_SZ=$(stat -c%s boot.img)
+            echo "boot.img size: $BOOT_SZ bytes (Limit: 16777216 bytes)"
+            if [ $BOOT_SZ -gt 16777216 ]; then
+              echo "ERROR: boot.img exceeds partition boundary!"
+              exit 1
+            fi
+          fi
+          
+          # Check system image size (limit 3,892,314,112 bytes)
+          if [ -f system.img ]; then
+            SYS_SZ=$(stat -c%s system.img)
+            echo "system.img size: $SYS_SZ bytes (Limit: 3892314112 bytes)"
+            if [ $SYS_SZ -gt 3892314112 ]; then
+              echo "ERROR: system.img exceeds partition boundary!"
+              exit 1
+            fi
+          fi
+          
+          sha256sum * > SHA256SUMS.txt
+          md5sum * > MD5SUMS.txt
+          
+          echo "=== BUILD ARTIFACTS AND HASHES ==="
+          cat SHA256SUMS.txt
+          ls -lah
+
+      - name: 13. Archive Build Artifacts & Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: lineageos-16.0-mt8765_P-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 90
+
+      - name: 14. Publish Release (Optional)
+        if: ${{ github.event.inputs.upload_release == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          tag_name: lineage-16.0-build-${{ github.run_id }}
+          name: LineageOS 16.0 - TB-7305X (${{ github.run_id }})
+          body_path: artifacts/SHA256SUMS.txt

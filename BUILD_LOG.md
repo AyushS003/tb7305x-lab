@@ -188,3 +188,34 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
    - Confirmed live access to `/data/app`, `/data/data`, `/data/media/0` (`DCIM`, `Download`, `Pictures`, etc.).
    - TWRP recovery log recorded: `operation_end - status=0`.
 
+---
+
+## 8. Custom ROM Development — Phase 1 to Phase 3 Execution
+
+1. **Phase 1: Project & Device Inspection**:
+   - Live tablet (`HA154H1C`): MT8765WB (4x Cortex-A53, `aarch64`), 2 GB RAM (`2017384 kB`), 32 GB eMMC (`31268536320 B`).
+   - Android userspace: 64-bit primary, 32-bit secondary (`zygote64_32`).
+   - Active stock kernel: Linux 4.4.146+ (`Wed Feb 9 2022`, Clang 6.0.2 / LLVM).
+   - Display & GPU: 600x1024, 160 dpi, PowerVR Rogue GE8100 with DDK `1.10@5051533` (VNDK 28 / SDK 28).
+   - Partition constraints: `boot` = 16 MiB (`16,777,216` B), `system` = 3,712 MiB (`3,892,314,112` B), `vendor` = 400 MiB (`419,430,400` B), `recovery` = 24 MiB (`25,165,824` B).
+   - Recovery & firmware artifacts preserved without modification (`firmware/extracted/recovery-verified.img`, `builds/recovery-crypto.img`).
+
+2. **Phase 2: GSI Boot-Failure Analysis & ROM Target Selection**:
+   - Discovered root cause of generic GSI boot failures:
+     - DDK 1.10 proprietary PowerVR GE8100 drivers crash `SurfaceFlinger` on Android 10+ BufferQueue / Gralloc 2.1/3.0.
+     - Linux 4.4.146 lacks kernel eBPF (`CONFIG_BPF_JIT`), causing Android 11+ `netd` failure.
+     - Keymaster 3.0 Binder interface mismatch with newer GSIs.
+     - Lenovo open-source kernel tree has broken hwcomposer bindings causing `SIGABRT` crashes on overlay app launches; verified stock kernel (`bc4e8440...`) runs stably.
+   - Selected Target: **LineageOS 16.0 (Android 9 Pie, 64-bit)**.
+     - Native 1:1 match with VNDK 28, PowerVR GE8100 DDK 1.10, HIDL 3.0, Keymaster 3.0.
+     - Frees 600–800 MB RAM compared to bloat-heavy OEM stock firmware.
+     - Secondary Fallback: Lightweight AOSP 9.0 (`android-9.0.0_r48`).
+
+3. **Phase 3: Source Tree Staging & CI Automation**:
+   - Device tree staged at `source/rom/device/lenovo/mt8765_P`:
+     - Synchronized prebuilts with verified authentic stock kernel (`prebuilts/kernel`, 8,608,863 B, SHA-256 `bc4e8440...`) and genuine recovery DTBO (`prebuilts/dtbo.img`, 39,838 B, SHA-256 `09fa1b4f...`).
+     - Aligned `BoardConfig.mk` with exact scatter partition limits and MediaTek mkbootimg offset parameters (`BOARD_BOOTIMAGE_PARTITION_SIZE := 16777216`, `BOARD_SYSTEMIMAGE_PARTITION_SIZE := 3892314112`, `BOARD_VENDORIMAGE_PARTITION_SIZE := 419430400`, `BOARD_RAMDISK_OFFSET := 0x04f88000`, `BOARD_KERNEL_TAGS_OFFSET := 0x03f88000`).
+     - Updated `device.mk` with `android.hardware.health@2.0` matching Android 9 Pie.
+   - Comprehensive technical documentation written to [`ROM_RESEARCH.md`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/ROM_RESEARCH.md).
+   - GitHub Actions CI workflow implemented at [`.github/workflows/build_lineageos.yml`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/.github/workflows/build_lineageos.yml) with automatic 12 GB swap allocation, runner debloating, shallow LineageOS 16.0 sync, vendor tree cloning (`mlm-games/android_vendor_lenovo_mt8765_P`), and partition size boundary verification.
+
