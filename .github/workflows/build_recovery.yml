@@ -56,14 +56,17 @@ jobs:
 
       - name: 4. Configure 12 GB Swap Space
         run: |
-          echo "Disabling existing swap..."
-          sudo swapoff -a || true
-          sudo rm -f /swapfile
+          SWAPFILE=/swapfile_ci
+          echo "Preparing dedicated CI swap file at ${SWAPFILE}..."
+          if swapon --show=NAME --noheadings | grep -qx "${SWAPFILE}"; then
+            sudo swapoff "${SWAPFILE}"
+          fi
+          sudo rm -f "${SWAPFILE}"
           echo "Creating 12 GB swap space..."
-          sudo fallocate -l 12G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=12288
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          sudo fallocate -l 12G "${SWAPFILE}" || sudo dd if=/dev/zero of="${SWAPFILE}" bs=1M count=12288
+          sudo chmod 600 "${SWAPFILE}"
+          sudo mkswap "${SWAPFILE}"
+          sudo swapon "${SWAPFILE}"
           echo "=== Memory with Swap ==="
           free -h
 
