@@ -1,0 +1,187 @@
+name: Reproducible TWRP Recovery Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: 'Select Build Target'
+        required: true
+        type: choice
+        default: 'reproduction_test_decrypt'
+        options:
+          - 'reproduction_test_decrypt'
+          - 'clean_baseline_main'
+          - 'modified_working_tree'
+      upload_release:
+        description: 'Publish as GitHub Release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build_recovery:
+    name: Build Recovery (${{ github.event.inputs.build_target }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Audit Runner Environment
+        run: |
+          echo "=== CPU Profile ==="
+          nproc
+          cat /proc/cpuinfo | grep "model name" | head -n 1
+          echo "=== Memory Profile ==="
+          free -h
+          echo "=== Initial Disk Space ==="
+          df -h
+
+      - name: 3. Free Disk Space (Debloat Runner)
+        run: |
+          echo "Purging unnecessary preinstalled tools and SDKs..."
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost
+          sudo docker image prune --all --force || true
+          sudo docker builder prune --all --force || true
+          echo "=== Disk Space After Debloat ==="
+          df -h
+
+      - name: 4. Configure 12 GB Swap Space
+        run: |
+          sudo fallocate -l 12G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo "=== Memory with Swap ==="
+          free -h
+
+      - name: 5. Set up Java 8 Toolchain
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '8'
+
+      - name: 6. Install Toolchain Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
+            git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev \
+            liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 \
+            libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc \
+            zip zlib1g-dev python2 python3
+          
+          # Force Python 2 as default python for Android 9 build tools
+          sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1
+          sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2
+          sudo update-alternatives --set python /usr/bin/python2
+          python --version
+          java -version
+
+      - name: 7. Install Google Repo Tool
+        run: |
+          mkdir -p ~/bin
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          sudo ln -sf ~/bin/repo /usr/bin/repo
+          git config --global user.name "Recovery-CI-Builder"
+          git config --global user.email "ci-builder@users.noreply.github.com"
+          git config --global color.ui false
+
+      - name: 8. Initialize Minimal TWRP 9.0 Manifest
+        run: |
+          mkdir -p ~/twrp_workspace
+          cd ~/twrp_workspace
+          repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-9.0
+          repo sync -c -j$(nproc) --no-clone-bundle --no-tags --force-sync
+
+      - name: 9. Checkout / Stage Device Tree
+        run: |
+          cd ~/twrp_workspace
+          rm -rf device/lenovo/mt8765_P
+          mkdir -p device/lenovo
+          
+          BUILD_TARGET="${{ github.event.inputs.build_target || 'reproduction_test_decrypt' }}"
+          
+          if [ "$BUILD_TARGET" == "reproduction_test_decrypt" ]; then
+            echo "Checking out REPRODUCTION target (branch test-decrypt, commit 50e0c68dd183f6c71d7d712eab790c177f834d53)..."
+            git clone https://github.com/mlm-games/twrp_lenovo_7305x_m7_mt8765_P.git -b test-decrypt device/lenovo/mt8765_P
+            cd device/lenovo/mt8765_P
+            git checkout 50e0c68dd183f6c71d7d712eab790c177f834d53
+          elif [ "$BUILD_TARGET" == "clean_baseline_main" ]; then
+            echo "Checking out CLEAN BASELINE target (branch main, commit 978046687567e3f3d48b2b5996f2a703b195be3b)..."
+            git clone https://github.com/mlm-games/twrp_lenovo_7305x_m7_mt8765_P.git -b main device/lenovo/mt8765_P
+            cd device/lenovo/mt8765_P
+            git checkout 978046687567e3f3d48b2b5996f2a703b195be3b
+          elif [ "$BUILD_TARGET" == "modified_working_tree" ]; then
+            echo "Checking out baseline test-decrypt commit 50e0c68dd183f6c71d7d712eab790c177f834d53..."
+            git clone https://github.com/mlm-games/twrp_lenovo_7305x_m7_mt8765_P.git -b test-decrypt device/lenovo/mt8765_P
+            cd device/lenovo/mt8765_P
+            git checkout 50e0c68dd183f6c71d7d712eab790c177f834d53
+            echo "Overlaying patched files from repository source/device/lenovo/mt8765_P..."
+            cp -rf $GITHUB_WORKSPACE/source/device/lenovo/mt8765_P/* .
+          fi
+          
+          echo "Resolved Device Tree Commit / Files:"
+          ls -la
+          git log -n 1 --oneline || echo "Local uncommitted tree"
+
+      - name: 10. Snapshot Exact Manifest Revisions
+        run: |
+          cd ~/twrp_workspace
+          repo manifest -r -o pinned_build_manifest.xml
+          cp pinned_build_manifest.xml $GITHUB_WORKSPACE/
+
+      - name: 11. Compile TWRP Recovery Image
+        run: |
+          set -o pipefail
+          cd ~/twrp_workspace
+          export LC_ALL=C
+          export ALLOW_MISSING_DEPENDENCIES=true
+          source build/envsetup.sh
+          lunch omni_mt8765_P-eng
+          
+          make clean
+          make -j$(nproc) recoveryimage 2>&1 | tee $GITHUB_WORKSPACE/build.log
+
+      - name: 12. Audit Build Outputs & Generate Cryptographic Hashes
+        run: |
+          cd ~/twrp_workspace/out/target/product/mt8765_P
+          mkdir -p $GITHUB_WORKSPACE/artifacts
+          
+          cp recovery.img $GITHUB_WORKSPACE/artifacts/recovery.img
+          cp ramdisk-recovery.* $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+          cp $GITHUB_WORKSPACE/build.log $GITHUB_WORKSPACE/artifacts/build.log
+          cp $GITHUB_WORKSPACE/pinned_build_manifest.xml $GITHUB_WORKSPACE/artifacts/pinned_build_manifest.xml
+          
+          cd $GITHUB_WORKSPACE/artifacts
+          sha256sum * > SHA256SUMS.txt
+          md5sum * > MD5SUMS.txt
+          
+          echo "=== BUILD ARTIFACTS AND HASHES ==="
+          cat SHA256SUMS.txt
+          ls -lah
+
+      - name: 13. Archive Build Artifacts & Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: twrp-${{ github.event.inputs.build_target }}-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 90
+
+      - name: 14. Publish Release (Optional)
+        if: ${{ github.event.inputs.upload_release == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          tag_name: twrp-build-${{ github.run_id }}
+          name: TWRP Build - ${{ github.event.inputs.build_target }} (${{ github.run_id }})
+          body_path: artifacts/SHA256SUMS.txt

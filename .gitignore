@@ -1,0 +1,42 @@
+# Firmware archive and flashtool utilities (~1.9 GB)
+firmware/
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+
+# Local test recovery images and unpacked ramdisks (~124 MB)
+recovery/
+
+# CI / local build outputs
+artifacts/
+builds/
+out/
+build.log
+*.log
+
+# Local device inventory, device backups, and serial logs
+inventory/
+backups/
+logs/
+benchmarks/
+reports/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Temporary and scratch files
+scratch/
+*.tmp
+*.bak
+
+# OS and IDE configuration
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
