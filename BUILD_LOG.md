@@ -49,6 +49,16 @@
    - **Target A (Reproduction Build)**: [Run #39560469854](https://github.com/AyushS003/tb7305x-lab/actions/runs/39560469854) — **PASSED**.
    - **Target C (Patched Build)**: [Run #39567280299](https://github.com/AyushS003/tb7305x-lab/actions/runs/39567280299) — **PASSED & VERIFIED**. Generated artifact `twrp-modified_working_tree-39567280299` (`F4E8E3B1...`, 24,131,584 bytes).
 
+6. **In-Memory Testing & Bootloader Findings**:
+   - Executed non-destructive `fastboot boot builds/recovery.img` on live tablet (Serial: `HA154H1C`).
+   - Fastboot upload succeeded (`OKAY [0.833s]`, `booting OKAY [0.062s]`), but MediaTek Little Kernel (LK) immediately triggered a watchdog warm reset into PreLoader (`VID_0E8D&PID_2000`) and rebooted normal Android system.
+   - Controlled baseline test: Executed `fastboot boot firmware/extracted/recovery-verified.img` (100% genuine factory-signed stock recovery). Exact same behavior observed (uploaded OKAY, LK reset into PreLoader, booted Android).
+   - **Conclusion**: MediaTek LK on `TB-7305X` (`mt8765_P-1a97443`) does not support RAM execution via `fastboot boot`. Custom recoveries can only run when flashed to the physical recovery partition.
+   - **Header & Tree Improvements Applied**:
+     - Discovered stock recovery header contains `recovery_dtbo_size: 39838` (matching `prebuilt/dtbo.img`), whereas upstream tree omitted `BOARD_INCLUDE_RECOVERY_DTBO := true`.
+     - Discovered stock recovery/boot kernel is 8,608,863 bytes (`bc4e8440...`), whereas upstream tree had an older 8,606,287 byte prebuilt.
+     - Updated `BoardConfig.mk` with `BOARD_INCLUDE_RECOVERY_DTBO := true` and synchronized `prebuilt/kernel` with the authentic stock kernel (Commit `c2d8d41`).
+
 ---
 
 ## 2. CI Runner Resources & Cost Assessment
@@ -59,7 +69,8 @@
 
 ---
 
-## 3. Next Actions
+## 3. Current Status & Next Actions
 
-1. Static validation completed: Verified image bounds (`24,131,584 / 25,165,824` bytes), dynamic linker symlinks (`/system/bin/linker` & `linker64`), and clean metadata `recovery.fstab`.
-2. Safe in-memory testing: Execute `fastboot boot builds/recovery.img` (non-destructive; does not flash partition) to evaluate recovery display, touch, ADB, and decryption.
+1. Strict non-destructive testing observed: Zero bytes written to device flash partitions.
+2. Tree improvements committed (`c2d8d41`): DTBO embedding and authentic stock kernel sync.
+3. Awaiting user decision on whether to push `c2d8d41` for a refreshed CI build and whether to authorize physical recovery partition flashing.
