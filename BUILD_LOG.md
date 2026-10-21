@@ -233,4 +233,18 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
    - Cleaned redundant empty `PRODUCT_PACKAGES += \` in `device.mk`.
    - Updated `TARGET_RECOVERY_FSTAB` in `BoardConfig.mk` to point to genuine [`source/rom/device/lenovo/mt8765_P/recovery.fstab`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/device/lenovo/mt8765_P/recovery.fstab).
 
+---
+
+## 10. `ckati` Prebuilt APK Resolution in Vendor Tree (Run #39616854955)
+
+1. **Failure Diagnosis**:
+   - Error: `error: Prebuilt apk found in PRODUCT_COPY_FILES: vendor/lenovo/mt8765_P/proprietary/vendor/app/MTKThermalManager/MTKThermalManager.apk:vendor/app/MTKThermalManager/MTKThermalManager.apk, use BUILD_PREBUILT instead!`
+   - Root Cause: In Android 9 Pie / LineageOS 16.0, `build/make/core/Makefile` strictly forbids copying `.apk` files via `PRODUCT_COPY_FILES`. Prebuilt APKs must be registered as modules via `BUILD_PREBUILT`.
+2. **Remediation Implemented**:
+   - Created vendor patch overlay directory at [`source/rom/vendor/lenovo/mt8765_P/`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/vendor/lenovo/mt8765_P/).
+   - Defined `MTKThermalManager` module in [`source/rom/vendor/lenovo/mt8765_P/Android.mk`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/vendor/lenovo/mt8765_P/Android.mk) using `BUILD_PREBUILT`, `LOCAL_MODULE_CLASS := APPS`, `LOCAL_CERTIFICATE := platform`, `LOCAL_VENDOR_MODULE := true`, and `LOCAL_DEX_PREOPT := false`.
+   - Removed `MTKThermalManager.apk` from `PRODUCT_COPY_FILES` in [`source/rom/vendor/lenovo/mt8765_P/mt8765_P-vendor.mk`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/vendor/lenovo/mt8765_P/mt8765_P-vendor.mk) and added `PRODUCT_PACKAGES += MTKThermalManager`.
+   - Updated [`.github/workflows/build_lineageos.yml`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/.github/workflows/build_lineageos.yml) step 9 to automatically overlay the patched vendor makefiles and sanitize any APK copy rules.
+
+
 

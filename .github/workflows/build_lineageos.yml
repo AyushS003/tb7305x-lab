@@ -117,6 +117,14 @@ jobs:
           echo "Cloning vendor tree from mlm-games/android_vendor_lenovo_mt8765_P..."
           git clone --depth=1 https://github.com/mlm-games/android_vendor_lenovo_mt8765_P.git -b main vendor/lenovo/mt8765_P
           
+          if [ -d "$GITHUB_WORKSPACE/source/rom/vendor/lenovo/mt8765_P" ]; then
+            echo "Applying patched vendor makefiles from repository..."
+            cp -rf $GITHUB_WORKSPACE/source/rom/vendor/lenovo/mt8765_P/* vendor/lenovo/mt8765_P/
+          fi
+          
+          echo "Sanitizing vendor makefiles: ensuring no prebuilt APKs in PRODUCT_COPY_FILES..."
+          sed -i '/MTKThermalManager\.apk/d' vendor/lenovo/mt8765_P/mt8765_P-vendor.mk
+          
           echo "Staged trees:"
           ls -la device/lenovo/mt8765_P/
           ls -la device/lenovo/mt8765_P/prebuilts/
