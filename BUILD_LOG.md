@@ -47,7 +47,7 @@
    - Repository: `https://github.com/AyushS003/tb7305x-lab` (Public).
    - `.gitignore` verified: Excluded 2.01 GB firmware dumps, recovery archives, and device serial logs.
    - **Target A (Reproduction Build)**: [Run #39560469854](https://github.com/AyushS003/tb7305x-lab/actions/runs/39560469854) — **PASSED**.
-   - **Target C (Patched Build)**: [Run #39562242983](https://github.com/AyushS003/tb7305x-lab/actions/runs/39562242983) — **PASSED**. Generated artifact `twrp-modified_working_tree-39562242983` (52.85 MB).
+   - **Target C (Patched Build)**: [Run #39567280299](https://github.com/AyushS003/tb7305x-lab/actions/runs/39567280299) — **PASSED & VERIFIED**. Generated artifact `twrp-modified_working_tree-39567280299` (`F4E8E3B1...`, 24,131,584 bytes).
 
 ---
 
@@ -61,6 +61,5 @@
 
 ## 3. Next Actions
 
-1. Download artifact `twrp-modified_working_tree-39562242983` from GitHub Actions.
-2. Run static validation ([docs/STATIC_VALIDATION.md](file:///E:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/docs/STATIC_VALIDATION.md)) on the compiled `recovery.img` to verify partition size boundary (<= 25,165,824 bytes), kernel offsets, and ramdisk dynamic linker symlinks.
-3. Keep physical device testing staged and strictly separated from CI build operations.
+1. Static validation completed: Verified image bounds (`24,131,584 / 25,165,824` bytes), dynamic linker symlinks (`/system/bin/linker` & `linker64`), and clean metadata `recovery.fstab`.
+2. Safe in-memory testing: Execute `fastboot boot builds/recovery.img` (non-destructive; does not flash partition) to evaluate recovery display, touch, ADB, and decryption.

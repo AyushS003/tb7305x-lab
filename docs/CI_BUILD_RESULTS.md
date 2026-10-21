@@ -81,13 +81,24 @@ Two distinct builds are defined to isolate functionality and establish full repr
 | :--- | :--- | :--- | :--- | :--- |
 | **Baseline Reference** | `50e0c68d...` | 23,906,304 | Release Tag `10829364374` | Reference Baseline (`79657A7BD1...`) |
 | **Target A: Reproduction** | `50e0c68d...` | 23,906,304 | [Run #39560469854](https://github.com/AyushS003/tb7305x-lab/actions/runs/39560469854) | **PASSED (Reproduced upstream TWRP 9.0 build)** |
-| **Target C: Patched Recovery** | `3b04a1c` + `50e0c68d` | ~23.9 MB | [Run #39562242983](https://github.com/AyushS003/tb7305x-lab/actions/runs/39562242983) | **PASSED (Dynamic linkers & FDE fstab fixes applied)** |
+| **Target C: Patched Recovery** | `b0fd111` + `50e0c68d` | 24,131,584 | [Run #39567280299](https://github.com/AyushS003/tb7305x-lab/actions/runs/39567280299) | **PASSED & STATICALLY VERIFIED** (`F4E8E3B1...`) |
 
 ---
 
-## 5. Next Engineering Action
+## 5. Static Validation Findings for Patched Binary
 
-1. Download artifact `twrp-modified_working_tree-39562242983.zip` to `builds/` or `recovery/`.
-2. Inspect the output `recovery.img` header, kernel size, ramdisk offsets, and file contexts using static inspection tools.
-3. Verify that `/system/bin/linker` symlink exists in the output ramdisk and that `/data` flags in `recovery.fstab` cleanly match the device's FDE metadata block.
-4. Keep physical device testing staged and strictly separated from CI build operations.
+- **File Path**: `builds/recovery.img`
+- **Output Size**: `24,131,584` bytes (+1,034,240 bytes margin within 24 MiB boundary).
+- **SHA-256**: `F4E8E3B115D838E93B21028E03F7BEB704B8028566F8686F3476CD45B15F3099`
+- **Kernel Verification**: `8,606,287` bytes (exact byte-for-byte match with stock boot kernel).
+- **Ramdisk Verification**:
+  - `init.recovery.mt8765.rc`: `/system/bin/linker` & `/system/bin/linker64` symlinks physically present and active.
+  - `etc/recovery.fstab`: Conflicting `encryptable=footer` duplicate removed; points to `/dev/block/platform/bootdevice/by-name/metadata`.
+  - Android init USB property triggers: Functional and verified.
+
+---
+
+## 6. Next Engineering Action
+
+1. Non-destructive fastboot boot verification: Test booting the image using `fastboot boot recovery.img` in memory without flashing to flash partition.
+2. Interrogate ADB shell under recovery to verify TEE/keymaster service execution and FDE `/data` decryption.
