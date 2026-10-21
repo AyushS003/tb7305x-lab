@@ -57,7 +57,26 @@
    - **Header & Tree Improvements Applied**:
      - Discovered stock recovery header contains `recovery_dtbo_size: 39838` (matching `prebuilt/dtbo.img`), whereas upstream tree omitted `BOARD_INCLUDE_RECOVERY_DTBO := true`.
      - Discovered stock recovery/boot kernel is 8,608,863 bytes (`bc4e8440...`), whereas upstream tree had an older 8,606,287 byte prebuilt.
-     - Updated `BoardConfig.mk` with `BOARD_INCLUDE_RECOVERY_DTBO := true` and synchronized `prebuilt/kernel` with the authentic stock kernel (Commit `c2d8d41`).
+     - Updated `BoardConfig.mk` with `BOARD_INCLUDE_RECOVERY_DTBO := true` and synchronized `prebuilt/kernel` with the authentic stock kernel (Commit `c2d8d41`, pushed in `ee38b08`).
+
+7. **Target C Refreshed Build ([Run #39578027764](https://github.com/AyushS003/tb7305x-lab/actions/runs/39578027764)) — PASSED & VERIFIED**:
+   - **Workflow Run**: Triggered on `main` (`ee38b08`), completed successfully in 16m 40s.
+   - **Artifact**: `twrp-modified_working_tree-39578027764` downloaded to `builds/` (55,436,752 bytes zip).
+   - **Output recovery.img**:
+     - Size: `24,174,592` bytes (23.05 MiB) — fits partition (`25,165,824` bytes) with **+991,232 bytes (+0.95 MiB)** safety margin.
+     - SHA-256: `0B6640B405BE58CD1612A7606AAFF3E9D0DE3849B13E8E3A7F47989DAFF76199`.
+     - Recovery DTBO: `39,838` bytes at offset `0x1704000` (100% byte-for-byte match with `prebuilt/dtbo.img` and stock recovery).
+     - Kernel: `8,608,863` bytes, SHA-256 `bc4e8440...` (100% byte-for-byte match with authentic stock recovery/boot kernel).
+     - Ramdisk: Contains dynamic linker symlinks (`/system/bin/linker` & `linker64`) and FDE metadata block `recovery.fstab`.
+
+### Comparison Matrix
+
+| Image | Size (Bytes) | Margin Remaining | Header Ver | DTBO Size | Kernel Size / Hash | SHA-256 Prefix |
+|---|---|---|---|---|---|---|
+| **Stock Lenovo (`recovery-verified.img`)** | 13,857,696 | +11,308,128 B | 1 | 39,838 B | 8,608,863 B (`bc4e8440`) | `A6867573...` |
+| **Upstream Community Release** | 23,906,304 | +1,259,520 B | 1 | 0 B (missing) | 8,606,287 B (`8bf0c295`) | `79657A7B...` |
+| **Run #39567280299 (Prior)** | 24,131,584 | +1,034,240 B | 1 | 0 B (missing) | 8,606,287 B (`8bf0c295`) | `F4E8E3B1...` |
+| **Run #39578027764 (New Active)** | **24,174,592** | **+991,232 B** | **1** | **39,838 B (matched)** | **8,608,863 B (`bc4e8440`)** | **`0B6640B4...`** |
 
 ---
 
@@ -71,6 +90,7 @@
 
 ## 3. Current Status & Next Actions
 
-1. Strict non-destructive testing observed: Zero bytes written to device flash partitions.
-2. Tree improvements committed (`c2d8d41`): DTBO embedding and authentic stock kernel sync.
-3. Awaiting user decision on whether to push `c2d8d41` for a refreshed CI build and whether to authorize physical recovery partition flashing.
+1. **Verified Image Ready**: `builds/recovery.img` incorporates all fixes (linker symlinks, FDE metadata fstab, embedded DTBO, authentic stock kernel).
+2. **Bootloader Constraint**: `fastboot boot` is confirmed non-functional on MT8765 Little Kernel (both stock and custom reboot immediately).
+3. **Non-Destructive Constraint Maintained**: Zero flash writes performed. Device running stock Android 9 (`HA154H1C`).
+4. **Awaiting User Flashing Authorization**: When authorized, test plan executes `fastboot flash recovery builds/recovery.img` with instant rollback available via `firmware/extracted/recovery-verified.img`.
