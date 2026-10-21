@@ -219,3 +219,18 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
    - Comprehensive technical documentation written to [`ROM_RESEARCH.md`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/ROM_RESEARCH.md).
    - GitHub Actions CI workflow implemented at [`.github/workflows/build_lineageos.yml`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/.github/workflows/build_lineageos.yml) with automatic 12 GB swap allocation, runner debloating, shallow LineageOS 16.0 sync, vendor tree cloning (`mlm-games/android_vendor_lenovo_mt8765_P`), and partition size boundary verification.
 
+---
+
+## 9. Soong Build-Generation Phase Diagnosis & Resolution (Run #39614055415)
+
+1. **Failure Diagnosis**:
+   - Error: `error: device/lenovo/mt8765_P/rootdir/Android.bp:1:1: unrecognized module type "prebuilt_etc"`
+   - Root Cause: In Android 9 Pie (SDK 28 / LineageOS 16.0), Soong does not implement the `prebuilt_etc` module type (which was introduced in Android 10 Q). When Soong scanned the device tree during bootstrap, it encountered `prebuilt_etc` definitions in `rootdir/Android.bp` and failed prior to generating `out/soong/build.ninja`.
+2. **Remediation Implemented**:
+   - Removed `source/rom/device/lenovo/mt8765_P/rootdir/Android.bp` containing invalid `prebuilt_etc` blocks.
+   - Converted all 17 vendor init `.rc` scripts and `fstab.enableswap` into standard GNU Make `BUILD_PREBUILT` definitions inside `source/rom/device/lenovo/mt8765_P/rootdir/Android.mk`.
+   - Included via `all-subdir-makefiles` and referenced by `PRODUCT_PACKAGES` in `device.mk`.
+   - Cleaned redundant empty `PRODUCT_PACKAGES += \` in `device.mk`.
+   - Updated `TARGET_RECOVERY_FSTAB` in `BoardConfig.mk` to point to genuine [`source/rom/device/lenovo/mt8765_P/recovery.fstab`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/device/lenovo/mt8765_P/recovery.fstab).
+
+

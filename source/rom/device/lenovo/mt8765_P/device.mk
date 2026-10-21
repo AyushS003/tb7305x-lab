@@ -20,8 +20,6 @@ PRODUCT_CHARACTERISTICS := tablet
 
 # Rootdir
 PRODUCT_PACKAGES += \
-
-PRODUCT_PACKAGES += \
     fstab.enableswap \
     factory_init.connectivity.rc \
     factory_init.project.rc \
