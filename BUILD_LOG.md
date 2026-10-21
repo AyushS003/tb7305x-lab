@@ -76,11 +76,31 @@
 | **Stock Lenovo (`recovery-verified.img`)** | 13,857,696 | +11,308,128 B | 1 | 39,838 B | 8,608,863 B (`bc4e8440`) | `A6867573...` |
 | **Upstream Community Release** | 23,906,304 | +1,259,520 B | 1 | 0 B (missing) | 8,606,287 B (`8bf0c295`) | `79657A7B...` |
 | **Run #39567280299 (Prior)** | 24,131,584 | +1,034,240 B | 1 | 0 B (missing) | 8,606,287 B (`8bf0c295`) | `F4E8E3B1...` |
-| **Run #39578027764 (New Active)** | **24,174,592** | **+991,232 B** | **1** | **39,838 B (matched)** | **8,608,863 B (`bc4e8440`)** | **`0B6640B4...`** |
+| **Run #39578027764 (Running Recovery)** | 24,174,592 | +991,232 B | 1 | 39,838 B (matched) | 8,608,863 B (`bc4e8440`) | `0B6640B4...` |
+| **Run #39586094933 (FDE Crypto Candidate)** | **23,363,584** | **+1,802,240 B** | **1** | **39,838 B (matched)** | **8,608,863 B (`bc4e8440`)** | **`D8253BF3...`** |
 
 ---
 
-## 2. CI Runner Resources & Cost Assessment
+## 2. FDE Crypto Implementation ([Run #39586094933](https://github.com/AyushS003/tb7305x-lab/actions/runs/39586094933))
+
+- **Workflow Run**: Triggered on `main` (`fc75c47`), completed successfully in 16m 12s.
+- **Artifact**: `twrp-modified_working_tree-39586094933` downloaded to `builds/` (53,092,534 bytes zip).
+- **Candidate Image (`builds/recovery-crypto.img`)**:
+  - Size: `23,363,584` bytes (22.28 MiB) — fits partition (`25,165,824` bytes) with **+1,802,240 bytes (+1.72 MiB)** safety margin (optimized via `TW_EXTRA_LANGUAGES := false`).
+  - SHA-256: `D8253BF3B74C8625F936EECA4D15B2CDC51AE44536523C46122C843CED3B0051`.
+  - Header Version: 1 (`ANDROID!`), Page size: 2048, Kernel size: 8,608,863 bytes.
+  - Recovery DTBO: `39,838` bytes at offset `0x163e000` (100% byte-for-byte match with `prebuilt/dtbo.img` and stock recovery).
+- **Crypto & HAL Verification in Ramdisk (`ramdisk-recovery.cpio`)**:
+  - `sbin/libcryptfsfde.so` (68,680 B): Compiled from `bootable/recovery/crypto/fde/cryptfs.cpp`.
+  - `sbin/libgpt_twrp.so` (68,192 B): GPT table reading utility for partition crypto inspection.
+  - `sbin/android.hardware.keymaster@3.0.so` (203,032 B) & `@4.0.so` (203,720 B): HIDL client interfaces.
+  - `sbin/hwservicemanager` (136,592 B): Hardware Binder service manager.
+  - `sbin/keystore`, `sbin/keystore_cli`, `sbin/libsoftkeymasterdevice.so`: Keymaster crypto stack.
+  - `init.recovery.mt8765.rc`: Fully provisions read-only mounts for `/system_root` and `/vendor`, `/system -> /system_root/system` SAR symlink, Microtrust TEE driver nodes, and `keymaster-3-0` / `teei_loader` lifecycle triggers.
+
+---
+
+## 3. CI Runner Resources & Cost Assessment
 
 - **Runner**: GitHub Actions `ubuntu-22.04` (4 vCPUs, 16 GB RAM + 12 GB swap file).
 - **Disk**: 65–70 GB free post-debloat (sufficient for minimal TWRP 9.0 shallow tree and build artifacts).
@@ -88,9 +108,9 @@
 
 ---
 
-## 3. Current Status & Next Actions
+## 4. Current Status & Next Actions
 
-1. **Verified Image Ready**: `builds/recovery.img` incorporates all fixes (linker symlinks, FDE metadata fstab, embedded DTBO, authentic stock kernel).
-2. **Bootloader Constraint**: `fastboot boot` is confirmed non-functional on MT8765 Little Kernel (both stock and custom reboot immediately).
-3. **Non-Destructive Constraint Maintained**: Zero flash writes performed. Device running stock Android 9 (`HA154H1C`).
-4. **Awaiting User Flashing Authorization**: When authorized, test plan executes `fastboot flash recovery builds/recovery.img` with instant rollback available via `firmware/extracted/recovery-verified.img`.
+1. **Running Recovery Intact**: Live recovery partition running TWRP 3.7.0 (`builds/recovery.img`, 24,174,592 bytes, SHA-256 `0B6640B4...`) is kept completely intact and functional.
+2. **Candidate Crypto Image Isolated**: New image saved separately to [`builds/recovery-crypto.img`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/builds/recovery-crypto.img) (23,363,584 bytes, SHA-256 `D8253BF3...`).
+3. **Non-Destructive Constraint Maintained**: Zero flash writes performed without explicit authorization. Userdata completely unmodified.
+4. **Awaiting User Flashing Approval**: Awaiting explicit user confirmation before flashing candidate `recovery-crypto.img` to physical recovery partition.
