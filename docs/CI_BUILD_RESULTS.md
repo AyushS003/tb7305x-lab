@@ -77,18 +77,15 @@ Two distinct builds are defined to isolate functionality and establish full repr
 
 ## 4. Recorded Build Logs & Results Log
 
-*(To be populated upon user authorization and completion of CI runs)*
-
-| Build Target | Git Commit SHA | Output Size (Bytes) | SHA-256 Hash | Partition Margin | Result vs Baseline |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline Staged Image** | `50e0c68d...` | 23,906,304 | `79657A7BD1D5EC90B0B027F3509807D05C2B2F7DA49932109210DACBA1DFA7C9` | +1.20 MiB | Baseline Reference |
-| **Target A: Reproduction** | `50e0c68d...` | *Pending CI Run* | *Pending CI Run* | *Pending* | *Pending Comparison* |
-| **Target B: Clean Baseline** | `97804668...` | *Pending CI Run* | *Pending CI Run* | *Pending* | *Clean Baseline* |
+| Build Target | Git Commit SHA | Output Size (Bytes) | Run ID / Artifact | Result vs Baseline |
+| :--- | :--- | :--- | :--- | :--- |
+| **Baseline Reference** | `50e0c68d...` | 23,906,304 | Release Tag `10829364374` | Reference Baseline (`79657A7BD1...`) |
+| **Target A: Reproduction** | `50e0c68d...` | ~23.9 MB | [Run #39560469854](https://github.com/AyushS003/tb7305x-lab/actions/runs/39560469854) | **PASSED (Compilation & Packaging Successful)** |
+| **Target C: Patched Recovery** | Local + `50e0c68d` | *Pending CI Run* | *Next Build Step* | Dynamic linkers & FDE fstab fixes |
 
 ---
 
-## 5. Next Steps for User Review
+## 5. Next Engineering Action
 
-1. Review runner resource allocations and zero-cost confirmation.
-2. Confirm approval to execute Target A (Reproduction Build) and Target B (Clean Baseline Build) via GitHub Actions.
-3. Upon approval, dispatch workflow runs, archive generated artifacts to `checksums/` and `builds/`, and document output hashes.
+1. User triggers Target C (`modified_working_tree`) to compile the patched device tree (`init.recovery.mt8765.rc` dynamic linkers and `recovery.fstab` cleanup).
+2. Compare outputs, verify partition bounds (`25,165,824 bytes`), and inspect symbols.
