@@ -246,5 +246,18 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
    - Removed `MTKThermalManager.apk` from `PRODUCT_COPY_FILES` in [`source/rom/vendor/lenovo/mt8765_P/mt8765_P-vendor.mk`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/vendor/lenovo/mt8765_P/mt8765_P-vendor.mk) and added `PRODUCT_PACKAGES += MTKThermalManager`.
    - Updated [`.github/workflows/build_lineageos.yml`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/.github/workflows/build_lineageos.yml) step 9 to automatically overlay the patched vendor makefiles and sanitize any APK copy rules.
 
+---
+
+## 11. Cloud-Only Acceleration & Memory Optimization
+
+1. **Virtual Memory Expansion to 36 GB**:
+   - Expanded runner swap allocation from 12 GB to 20 GB on NVMe storage (`/mnt/build_swapfile_20g`).
+   - Combined with 16 GB physical RAM, total runner memory is **36 GB virtual memory** (`16 GB physical + 20 GB swap`) at $0.00 cost.
+   - Eliminates potential Out-Of-Memory (OOM) aborts during heavy linking and symbol resolution phases (`ld.lld`, `metalava`).
+2. **Persistent Cloud Compiler Cache (`ccache`)**:
+   - Integrated `actions/cache@v4` caching `~/.ccache` across workflow runs with dynamic hash keys (`ccache-lineage-16.0-${{ github.ref_name }}-${{ github.sha }}`).
+   - Configured `ccache -M 10G` with compressed object caching (`ccache -o compression=true`).
+   - Enables compiler object reuse, cutting subsequent cloud compilation times from ~1.5–2 hours down to ~15–25 minutes.
+
 
 

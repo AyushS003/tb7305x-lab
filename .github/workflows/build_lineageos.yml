@@ -55,16 +55,16 @@ jobs:
           echo "=== Disk Space After Debloat ==="
           df -h
 
-      - name: 4. Configure 12 GB Swap Space
+      - name: 4. Configure 20 GB Swap Space (36 GB Virtual Memory)
         run: |
-          SWAP_FILE="/mnt/build_swapfile_12g"
+          SWAP_FILE="/mnt/build_swapfile_20g"
           sudo swapoff -a || true
-          sudo rm -f /swapfile "${SWAP_FILE}" || true
-          sudo fallocate -l 12G "${SWAP_FILE}" || sudo dd if=/dev/zero of="${SWAP_FILE}" bs=1M count=12288
+          sudo rm -f /swapfile /mnt/build_swapfile_* "${SWAP_FILE}" || true
+          sudo fallocate -l 20G "${SWAP_FILE}" || sudo dd if=/dev/zero of="${SWAP_FILE}" bs=1M count=20480
           sudo chmod 600 "${SWAP_FILE}"
           sudo mkswap "${SWAP_FILE}"
           sudo swapon "${SWAP_FILE}"
-          echo "=== Active Memory & Swap ==="
+          echo "=== Active Memory & Swap (36 GB Total Virtual Memory) ==="
           free -h
 
       - name: 5. Set up Java 8 Toolchain
@@ -136,13 +136,29 @@ jobs:
           repo manifest -r -o pinned_build_manifest.xml
           cp pinned_build_manifest.xml $GITHUB_WORKSPACE/
 
-      - name: 11. Compile LineageOS 16.0
+      - name: 11. Configure Cloud Compiler Cache (ccache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-lineage-16.0-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ccache-lineage-16.0-${{ github.ref_name }}-
+            ccache-lineage-16.0-
+
+      - name: 12. Compile LineageOS 16.0
         run: |
           set -o pipefail
           cd ~/los_workspace
           export LC_ALL=C
           export ALLOW_MISSING_DEPENDENCIES=true
           export WITHOUT_CHECK_API=true
+          export USE_CCACHE=1
+          export CCACHE_EXEC=/usr/bin/ccache
+          export CCACHE_DIR=$HOME/.ccache
+          ccache -M 10G
+          ccache -o compression=true
+          ccache -z
+          ccache -s
           
           source build/envsetup.sh
           lunch lineage_mt8765_P-userdebug
@@ -159,8 +175,11 @@ jobs:
           elif [ "$TARGET" == "bacon_full_zip" ]; then
             mka bacon 2>&1 | tee $GITHUB_WORKSPACE/build.log
           fi
+          
+          echo "=== CCACHE POST-BUILD STATS ==="
+          ccache -s
 
-      - name: 12. Audit Build Outputs & Validate Partition Sizing
+      - name: 13. Audit Build Outputs & Validate Partition Sizing
         run: |
           cd ~/los_workspace/out/target/product/mt8765_P
           mkdir -p $GITHUB_WORKSPACE/artifacts
@@ -204,14 +223,14 @@ jobs:
           cat SHA256SUMS.txt
           ls -lah
 
-      - name: 13. Archive Build Artifacts & Logs
+      - name: 14. Archive Build Artifacts & Logs
         uses: actions/upload-artifact@v4
         with:
           name: lineageos-16.0-mt8765_P-${{ github.run_id }}
           path: artifacts/
           retention-days: 90
 
-      - name: 14. Publish Release (Optional)
+      - name: 15. Publish Release (Optional)
         if: ${{ github.event.inputs.upload_release == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
