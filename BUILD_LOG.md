@@ -3,7 +3,7 @@
 **Target Hardware:** Lenovo Tab M7 (`TB-7305X`, MediaTek `MT8765_P` / `MT6739`)  
 **Stock Firmware:** Android 9 Pie (`TB-7305X_S000126_220620_ROW`)  
 **Recovery Partition:** `0x1800000` (25,165,824 bytes / 24.00 MiB)  
-**Status:** Workflow Corrected & Device Tree Patched — Ready for CI Build  
+**Status:** Published to Private GitHub Repository (`AyushS003/tb7305x-lab`) — Ready for CI Build  
 
 ---
 
@@ -17,7 +17,7 @@
    - Added three selectable build targets:
      - `reproduction_test_decrypt`: Exact baseline commit `50e0c68dd183f6c71d7d712eab790c177f834d53`.
      - `clean_baseline_main`: Upstream `main` commit `978046687567e3f3d48b2b5996f2a703b195be3b`.
-     - `modified_working_tree`: Builds directly from `source/device/lenovo/mt8765_P` with our targeted patches.
+     - `modified_working_tree`: Clones baseline `test-decrypt` and overlays local patches from `source/device/lenovo/mt8765_P`.
 
 2. **Baseline Image Provenance & Integrity**:
    - Upstream GitHub Release: Tag `10829364374` (Run ID `10829364374`, built 2024-09-12).
@@ -43,18 +43,24 @@
      - Added `/system/bin` directory creation and symlinked `/sbin/linker` and `/sbin/linker64` so vendor HAL binaries can execute.
      - Removed non-existent `/sbin/mntl_link` execution.
 
+5. **Repository Published**:
+   - Repository: `https://github.com/AyushS003/tb7305x-lab` (Private).
+   - Initial commit: `116c4a1` (41 tracked files, 8.4 MB).
+   - `.gitignore` verified: Excluded 2.01 GB firmware dumps, recovery archives, and device serial logs.
+
 ---
 
 ## 2. CI Runner Resources & Cost Assessment
 
-- **Runner**: GitHub Actions `ubuntu-22.04` (4 vCPUs, 16 GB RAM + 12 GB swap file).
+- **Runner**: GitHub Actions `ubuntu-22.04` (2 vCPUs, 8 GB RAM + 12 GB swap file).
 - **Disk**: 65–70 GB free post-debloat (sufficient for minimal TWRP 9.0 shallow tree and build artifacts).
-- **Cost**: **$0.00** (Free unlimited runner minutes for public GitHub repositories; 0 billing impact).
+- **Cost**: Consumes ~40 minutes from the free 2,000 monthly Actions allowance for private repositories ($0.00 billing impact).
 
 ---
 
 ## 3. Next Actions
 
-1. Provide GitHub repository destination or trigger build dispatch for Target A (`reproduction_test_decrypt`) and Target C (`modified_working_tree`).
-2. Download and compare output `recovery.img` artifacts against baseline SHA-256.
-3. Validate binary symbols and partition byte limits before any tablet-side interaction.
+1. Trigger workflow `reproduction_test_decrypt` via GitHub Actions tab on `AyushS003/tb7305x-lab`.
+2. Compare output `recovery.img` artifact against baseline SHA-256 (`79657A7BD1...`).
+3. Trigger Target C (`modified_working_tree`) to compile the patched device tree.
+4. Verify output image size and symbols against partition bounds (`25,165,824 bytes`).
