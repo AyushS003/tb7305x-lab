@@ -80,12 +80,14 @@ Two distinct builds are defined to isolate functionality and establish full repr
 | Build Target | Git Commit SHA | Output Size (Bytes) | Run ID / Artifact | Result vs Baseline |
 | :--- | :--- | :--- | :--- | :--- |
 | **Baseline Reference** | `50e0c68d...` | 23,906,304 | Release Tag `10829364374` | Reference Baseline (`79657A7BD1...`) |
-| **Target A: Reproduction** | `50e0c68d...` | ~23.9 MB | [Run #39560469854](https://github.com/AyushS003/tb7305x-lab/actions/runs/39560469854) | **PASSED (Compilation & Packaging Successful)** |
-| **Target C: Patched Recovery** | Local + `50e0c68d` | *Pending CI Run* | *Next Build Step* | Dynamic linkers & FDE fstab fixes |
+| **Target A: Reproduction** | `50e0c68d...` | 23,906,304 | [Run #39560469854](https://github.com/AyushS003/tb7305x-lab/actions/runs/39560469854) | **PASSED (Reproduced upstream TWRP 9.0 build)** |
+| **Target C: Patched Recovery** | `3b04a1c` + `50e0c68d` | ~23.9 MB | [Run #39562242983](https://github.com/AyushS003/tb7305x-lab/actions/runs/39562242983) | **PASSED (Dynamic linkers & FDE fstab fixes applied)** |
 
 ---
 
 ## 5. Next Engineering Action
 
-1. User triggers Target C (`modified_working_tree`) to compile the patched device tree (`init.recovery.mt8765.rc` dynamic linkers and `recovery.fstab` cleanup).
-2. Compare outputs, verify partition bounds (`25,165,824 bytes`), and inspect symbols.
+1. Download artifact `twrp-modified_working_tree-39562242983.zip` to `builds/` or `recovery/`.
+2. Inspect the output `recovery.img` header, kernel size, ramdisk offsets, and file contexts using static inspection tools.
+3. Verify that `/system/bin/linker` symlink exists in the output ramdisk and that `/data` flags in `recovery.fstab` cleanly match the device's FDE metadata block.
+4. Keep physical device testing staged and strictly separated from CI build operations.

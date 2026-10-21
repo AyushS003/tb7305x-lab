@@ -43,24 +43,24 @@
      - Added `/system/bin` directory creation and symlinked `/sbin/linker` and `/sbin/linker64` so vendor HAL binaries can execute.
      - Removed non-existent `/sbin/mntl_link` execution.
 
-5. **Repository Published**:
-   - Repository: `https://github.com/AyushS003/tb7305x-lab` (Private).
-   - Initial commit: `116c4a1` (41 tracked files, 8.4 MB).
+5. **Repository Published & CI Builds Verified**:
+   - Repository: `https://github.com/AyushS003/tb7305x-lab` (Public).
    - `.gitignore` verified: Excluded 2.01 GB firmware dumps, recovery archives, and device serial logs.
+   - **Target A (Reproduction Build)**: [Run #39560469854](https://github.com/AyushS003/tb7305x-lab/actions/runs/39560469854) — **PASSED**.
+   - **Target C (Patched Build)**: [Run #39562242983](https://github.com/AyushS003/tb7305x-lab/actions/runs/39562242983) — **PASSED**. Generated artifact `twrp-modified_working_tree-39562242983` (52.85 MB).
 
 ---
 
 ## 2. CI Runner Resources & Cost Assessment
 
-- **Runner**: GitHub Actions `ubuntu-22.04` (2 vCPUs, 8 GB RAM + 12 GB swap file).
+- **Runner**: GitHub Actions `ubuntu-22.04` (4 vCPUs, 16 GB RAM + 12 GB swap file).
 - **Disk**: 65–70 GB free post-debloat (sufficient for minimal TWRP 9.0 shallow tree and build artifacts).
-- **Cost**: Consumes ~40 minutes from the free 2,000 monthly Actions allowance for private repositories ($0.00 billing impact).
+- **Cost**: **$0.00** (100% Free unlimited runner minutes for public GitHub repositories; 0 billing impact).
 
 ---
 
 ## 3. Next Actions
 
-1. Trigger workflow `reproduction_test_decrypt` via GitHub Actions tab on `AyushS003/tb7305x-lab`.
-2. Compare output `recovery.img` artifact against baseline SHA-256 (`79657A7BD1...`).
-3. Trigger Target C (`modified_working_tree`) to compile the patched device tree.
-4. Verify output image size and symbols against partition bounds (`25,165,824 bytes`).
+1. Download artifact `twrp-modified_working_tree-39562242983` from GitHub Actions.
+2. Run static validation ([docs/STATIC_VALIDATION.md](file:///E:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/docs/STATIC_VALIDATION.md)) on the compiled `recovery.img` to verify partition size boundary (<= 25,165,824 bytes), kernel offsets, and ramdisk dynamic linker symlinks.
+3. Keep physical device testing staged and strictly separated from CI build operations.
