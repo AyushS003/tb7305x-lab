@@ -56,15 +56,25 @@ jobs:
 
       - name: 4. Configure 12 GB Swap Space
         run: |
-          echo "Disabling existing swap..."
+          SWAP_FILE="/mnt/build_swapfile_12g"
+          echo "Current memory and swap status:"
+          free -h
+          swapon --show || true
+          
+          echo "Disabling all pre-existing swap devices..."
           sudo swapoff -a || true
-          sudo rm -f /swapfile
-          echo "Creating 12 GB swap space..."
-          sudo fallocate -l 12G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=12288
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          echo "=== Memory with Swap ==="
+          
+          echo "Removing any stale swap files..."
+          sudo rm -f /swapfile "${SWAP_FILE}" || true
+          
+          echo "Allocating 12 GB swap space at ${SWAP_FILE}..."
+          sudo fallocate -l 12G "${SWAP_FILE}" || sudo dd if=/dev/zero of="${SWAP_FILE}" bs=1M count=12288
+          sudo chmod 600 "${SWAP_FILE}"
+          sudo mkswap "${SWAP_FILE}"
+          sudo swapon "${SWAP_FILE}"
+          
+          echo "=== Configured Memory & Active Swap ==="
+          swapon --show
           free -h
 
       - name: 5. Set up Java 8 Toolchain
