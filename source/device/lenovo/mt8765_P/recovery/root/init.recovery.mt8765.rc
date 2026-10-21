@@ -24,6 +24,47 @@ on init
 
     write /sys/devices/platform/mt6357_gauge/kpdpwr_reset 0
 
+on fs
+    # Mount system and vendor strictly read-only for HAL services
+    wait /dev/block/platform/bootdevice/by-name/system
+    mount ext4 /dev/block/platform/bootdevice/by-name/system /system_root ro wait
+    wait /dev/block/platform/bootdevice/by-name/vendor
+    mount ext4 /dev/block/platform/bootdevice/by-name/vendor /vendor ro wait
+
+    # Ensure /system points to /system_root/system on SAR
+    rm /system/bin/linker
+    rm /system/bin/linker64
+    rmdir /system/bin
+    rmdir /system
+    symlink /system_root/system /system
+
+    # Microtrust TEE driver permissions
+    chmod 0660 /dev/teei_loader
+    chmod 0660 /dev/teei_fp
+    chown system system /dev/teei_fp
+    chown system system /dev/teei_loader
+
+    start teei_loader
+    start hwservicemanager
+
+on property:hwservicemanager.ready=true
+    start keymaster-3-0
+
+on property:ro.crypto.state=unsupported
+    stop teei_loader
+    stop keymaster-3-0
+    stop hwservicemanager
+
+on property:ro.crypto.state=unencrypted
+    stop teei_loader
+    stop keymaster-3-0
+    stop hwservicemanager
+
+on property:twrp.decrypt.done=true
+    stop teei_loader
+    stop keymaster-3-0
+    stop hwservicemanager
+
 on post-fs-data
     # Support A/B feature for boot region
     symlink /dev/block/mmcblk0boot0 /dev/block/platform/bootdevice/by-name/preloader_a
@@ -117,3 +158,24 @@ on property:sys.usb.config=sideload,adb && property:sys.usb.ffs.ready=1
     symlink /config/usb_gadget/g1/functions/ffs.adb /config/usb_gadget/g1/configs/b.1/f2
     write /config/usb_gadget/g1/UDC "musb-hdrc"
     setprop sys.usb.state ${sys.usb.config}
+
+service hwservicemanager /system/bin/hwservicemanager
+    user root
+    group root readproc
+    disabled
+    onrestart setprop hwservicemanager.ready false
+    seclabel u:r:recovery:s0
+
+service keymaster-3-0 /vendor/bin/hw/android.hardware.keymaster@3.0-service
+    user root
+    group root drmrpc
+    disabled
+    seclabel u:r:recovery:s0
+
+service teei_loader /vendor/bin/teei_loader
+    user root
+    group root
+    setenv LD_LIBRARY_PATH /system/lib:/vendor/lib
+    disabled
+    oneshot
+    seclabel u:r:recovery:s0
