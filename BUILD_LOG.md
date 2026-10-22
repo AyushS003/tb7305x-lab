@@ -259,5 +259,36 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
    - Configured `ccache -M 10G` with compressed object caching (`ccache -o compression=true`).
    - Enables compiler object reuse, cutting subsequent cloud compilation times from ~1.5–2 hours down to ~15–25 minutes.
 
+---
+
+## 12. ClearKey HIDL Frameworks/AV Compilation Fix (Run #39619175568)
+
+1. **Failure Diagnosis**:
+   - **Target Module**: `android.hardware.drm@1.1-service.clearkey` (`frameworks/av/drm/mediadrm/plugins/clearkey/hidl/DrmFactory.cpp`).
+   - **First Errors**:
+     ```
+     frameworks/av/drm/mediadrm/plugins/clearkey/hidl/include/DrmPlugin.h:336:5: error: unknown type name 'DeviceFiles'
+         DeviceFiles mFileHandle GUARDED_BY(mFileHandleLock);
+     system/core/libutils/include/utils/StrongPointer.h:136:11: error: cannot initialize a member subobject of type 'android::hardware::drm::V1_0::IDrmPlugin *' with an lvalue of type 'android::hardware::drm::V1_1::clearkey::DrmPlugin *'
+     system/core/libutils/include/utils/StrongPointer.h:138:10: error: static_cast from 'android::hardware::drm::V1_1::clearkey::DrmPlugin *' to 'android::hardware::drm::V1_0::IDrmPlugin *', which are not related by inheritance, is not allowed
+     ```
+   - **Root Cause Investigation**:
+     - Upstream commit `2692e4bcdba06eec20424291acaac5669acf581f` on `LineageOS/android_frameworks_av` branch `lineage-16.0` backported Android 10/11 commit `dab37c25e3337387809fd35c7cd46abf76088b83` (CVE-2022-2209 / Bug 235601882) to address a race condition in `setSecurityLevel`.
+     - In Android 10/11, persistent license storage (`DeviceFiles`) existed in ClearKey. When backporting to Android 9 Pie (where `DeviceFiles` does not exist), the merge conflict resolution erroneously copied:
+       ```cpp
+       DeviceFiles mFileHandle GUARDED_BY(mFileHandleLock);
+       Mutex mFileHandleLock;
+       Mutex mSecureStopLock;
+       Mutex mSecurityLevelLock;
+       ```
+     - Because `DeviceFiles` is undefined in Android 9, Clang marked `struct DrmPlugin` as an invalid class declaration, which broke its inheritance resolution from `android::hardware::drm::V1_1::IDrmPlugin` and `android::hardware::drm::V1_0::IDrmPlugin`. This caused the subsequent `static_cast` in `StrongPointer.h` to fail during `_hidl_cb(Status::BAD_VALUE, plugin)` in `DrmFactory.cpp`.
+2. **Remediation Implemented**:
+   - Created source overlay directory [`source/rom/frameworks/av/drm/mediadrm/plugins/clearkey/hidl/`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/frameworks/av/drm/mediadrm/plugins/clearkey/hidl/) with matching Android 9 ClearKey HIDL implementation.
+   - Corrected [`source/rom/frameworks/av/drm/mediadrm/plugins/clearkey/hidl/include/DrmPlugin.h`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/frameworks/av/drm/mediadrm/plugins/clearkey/hidl/include/DrmPlugin.h):
+     - Removed undefined `DeviceFiles mFileHandle GUARDED_BY(mFileHandleLock);`, `Mutex mFileHandleLock;`, and `Mutex mSecureStopLock;`.
+     - Preserved `Mutex mSecurityLevelLock;` guarding `mSecurityLevel` to maintain full CVE-2022-2209 thread safety as required by `DrmPlugin.cpp`.
+   - Updated [`.github/workflows/build_lineageos.yml`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/.github/workflows/build_lineageos.yml) step 9 to automatically overlay `$GITHUB_WORKSPACE/source/rom/frameworks/*` onto `los_workspace/frameworks/` and verify header integrity prior to compilation.
+
+
 
 

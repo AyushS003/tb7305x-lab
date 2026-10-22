@@ -125,10 +125,18 @@ jobs:
           echo "Sanitizing vendor makefiles: ensuring no prebuilt APKs in PRODUCT_COPY_FILES..."
           sed -i '/MTKThermalManager\.apk/d' vendor/lenovo/mt8765_P/mt8765_P-vendor.mk
           
+          if [ -d "$GITHUB_WORKSPACE/source/rom/frameworks" ]; then
+            echo "Applying patched framework sources from repository..."
+            cp -rf $GITHUB_WORKSPACE/source/rom/frameworks/* frameworks/
+          fi
+          
           echo "Staged trees:"
           ls -la device/lenovo/mt8765_P/
           ls -la device/lenovo/mt8765_P/prebuilts/
           ls -la vendor/lenovo/mt8765_P/
+          echo "Verifying ClearKey DrmPlugin.h:"
+          grep -n "DeviceFiles" frameworks/av/drm/mediadrm/plugins/clearkey/hidl/include/DrmPlugin.h || echo "SUCCESS: DeviceFiles removed from DrmPlugin.h"
+          grep -n "mSecurityLevelLock" frameworks/av/drm/mediadrm/plugins/clearkey/hidl/include/DrmPlugin.h
 
       - name: 10. Snapshot Exact Build Manifest
         run: |
