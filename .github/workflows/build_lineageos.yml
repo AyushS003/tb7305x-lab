@@ -26,7 +26,7 @@ jobs:
   build_rom:
     name: Build LineageOS 16.0 (${{ github.event.inputs.build_target }})
     runs-on: ubuntu-22.04
-    timeout-minutes: 240
+    timeout-minutes: 360
 
     steps:
       - name: 1. Checkout Repository
@@ -75,8 +75,8 @@ jobs:
 
       - name: 6. Install Android 9 Build Toolchain Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=20
+          sudo apt-get install -y --no-install-recommends \
             bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
             git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev \
             liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 \
@@ -144,12 +144,13 @@ jobs:
           repo manifest -r -o pinned_build_manifest.xml
           cp pinned_build_manifest.xml $GITHUB_WORKSPACE/
 
-      - name: 11. Configure Cloud Compiler Cache (ccache)
-        uses: actions/cache@v4
+      - name: 11. Restore Cloud Compiler Cache (ccache)
+        uses: actions/cache/restore@v4
         with:
           path: ~/.ccache
-          key: ccache-lineage-16.0-${{ github.ref_name }}-${{ github.sha }}
+          key: ccache-lineage-16.0-${{ github.ref_name }}-${{ github.sha }}-${{ github.run_id }}
           restore-keys: |
+            ccache-lineage-16.0-${{ github.ref_name }}-${{ github.sha }}-
             ccache-lineage-16.0-${{ github.ref_name }}-
             ccache-lineage-16.0-
 
@@ -187,19 +188,27 @@ jobs:
           echo "=== CCACHE POST-BUILD STATS ==="
           ccache -s
 
+      - name: Save Cloud Compiler Cache (ccache)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.ccache
+          key: ccache-lineage-16.0-${{ github.ref_name }}-${{ github.sha }}-${{ github.run_id }}
+
       - name: 13. Audit Build Outputs & Validate Partition Sizing
+        if: always()
         run: |
-          cd ~/los_workspace/out/target/product/mt8765_P
           mkdir -p $GITHUB_WORKSPACE/artifacts
-          
-          # Copy outputs
-          cp -f boot.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
-          cp -f system.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
-          cp -f vendor.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
-          cp -f dtbo.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
-          cp -f lineage-*.zip $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
-          cp -f $GITHUB_WORKSPACE/build.log $GITHUB_WORKSPACE/artifacts/build.log
-          cp -f $GITHUB_WORKSPACE/pinned_build_manifest.xml $GITHUB_WORKSPACE/artifacts/pinned_build_manifest.xml
+          if [ -d ~/los_workspace/out/target/product/mt8765_P ]; then
+            cd ~/los_workspace/out/target/product/mt8765_P
+            cp -f boot.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+            cp -f system.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+            cp -f vendor.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+            cp -f dtbo.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+            cp -f lineage-*.zip $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+          fi
+          cp -f $GITHUB_WORKSPACE/build.log $GITHUB_WORKSPACE/artifacts/build.log 2>/dev/null || true
+          cp -f $GITHUB_WORKSPACE/pinned_build_manifest.xml $GITHUB_WORKSPACE/artifacts/pinned_build_manifest.xml 2>/dev/null || true
           
           cd $GITHUB_WORKSPACE/artifacts
           
@@ -224,14 +233,15 @@ jobs:
             fi
           fi
           
-          sha256sum * > SHA256SUMS.txt
-          md5sum * > MD5SUMS.txt
+          sha256sum * > SHA256SUMS.txt 2>/dev/null || true
+          md5sum * > MD5SUMS.txt 2>/dev/null || true
           
           echo "=== BUILD ARTIFACTS AND HASHES ==="
-          cat SHA256SUMS.txt
+          cat SHA256SUMS.txt 2>/dev/null || true
           ls -lah
 
       - name: 14. Archive Build Artifacts & Logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lineageos-16.0-mt8765_P-${{ github.run_id }}

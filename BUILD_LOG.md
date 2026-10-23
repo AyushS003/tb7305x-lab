@@ -289,6 +289,22 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
      - Preserved `Mutex mSecurityLevelLock;` guarding `mSecurityLevel` to maintain full CVE-2022-2209 thread safety as required by `DrmPlugin.cpp`.
    - Updated [`.github/workflows/build_lineageos.yml`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/.github/workflows/build_lineageos.yml) step 9 to automatically overlay `$GITHUB_WORKSPACE/source/rom/frameworks/*` onto `los_workspace/frameworks/` and verify header integrity prior to compilation.
 
+---
+
+## 13. Build Performance Scaling & Timeout Expansion (Run #39784725461)
+
+1. **Run Performance Analysis**:
+   - **ClearKey Fix Confirmed**: Step 9 assertions verified `SUCCESS: DeviceFiles removed from DrmPlugin.h` and valid `mSecurityLevelLock` guards. Zero ClearKey compilation errors were encountered.
+   - **Compilation Progress**: Reached **target 76,169 / 109,615 (69%)** with 0 errors across 3.5 hours of active Ninja execution.
+   - **Timeout Limitation**: The workflow was terminated at exactly 240 minutes (4.0 hours) by the `timeout-minutes: 240` constraint. Due to a cold compiler cache and Azure package mirror throttling during toolchain setup (consuming ~20 minutes), the 4-hour window was insufficient to reach 100% completion on a 4-vCPU runner.
+   - **Cache Loss**: Because the job was cancelled by timeout, `actions/cache@v4` skipped its post-job cache save step, losing ~76,000 compiled objects.
+2. **Workflow Scalability Improvements**:
+   - **Maximum Timeout**: Increased `timeout-minutes` from 240 to **360 minutes (6.0 hours)**, the maximum limit permitted on GitHub Actions runners.
+   - **Package Mirror Optimization**: Configured `apt-get` with retries, fast socket timeouts (`Acquire::http::Timeout=20`), and `--no-install-recommends` to prevent toolchain installation stalls.
+   - **Deterministic Cloud Caching**: Split `actions/cache` into explicit `actions/cache/restore@v4` and an unconditional `actions/cache/save@v4` with `if: always()`, guaranteeing all accumulated object files are saved to GitHub cloud cache even on cancellation or timeout.
+   - **Fail-Safe Artifact Upload**: Configured Step 13 (partition audit) and Step 14 (artifact upload) with `if: always()` to ensure `build.log` and partial image outputs are preserved in every execution.
+
+
 
 
 
