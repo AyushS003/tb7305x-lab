@@ -70,16 +70,11 @@ jobs:
           echo "=== Disk Space After Debloat ==="
           df -h
 
-      - name: 4. Configure 8 GB Swap Space (24 GB Total Virtual Memory)
+      - name: 4. Configure Memory Environment
         run: |
-          SWAP_FILE="/mnt/build_swapfile_8g"
           sudo swapoff -a || true
-          sudo rm -f /swapfile /mnt/build_swapfile_* "${SWAP_FILE}" || true
-          sudo fallocate -l 8G "${SWAP_FILE}" || sudo dd if=/dev/zero of="${SWAP_FILE}" bs=1M count=8192
-          sudo chmod 600 "${SWAP_FILE}"
-          sudo mkswap "${SWAP_FILE}"
-          sudo swapon "${SWAP_FILE}"
-          echo "=== Active Memory & Swap (24 GB Total Virtual Memory) ==="
+          sudo rm -f /swapfile /mnt/build_swapfile_* || true
+          echo "=== Active Memory (Physical RAM: 16 GB, zero disk wasted on swap) ==="
           free -h
 
       - name: 5. Set up Java 8 Toolchain
@@ -160,11 +155,20 @@ jobs:
           grep -n "DeviceFiles" frameworks/av/drm/mediadrm/plugins/clearkey/hidl/include/DrmPlugin.h || echo "SUCCESS: DeviceFiles removed from DrmPlugin.h"
           grep -n "mSecurityLevelLock" frameworks/av/drm/mediadrm/plugins/clearkey/hidl/include/DrmPlugin.h
 
-      - name: 10. Snapshot Exact Build Manifest
+      - name: 10. Snapshot Exact Build Manifest & Purge Inert .repo Cache
         run: |
           cd ~/los_workspace
           repo manifest -r -o pinned_build_manifest.xml
           cp pinned_build_manifest.xml $GITHUB_WORKSPACE/
+          
+          echo "=== Disk Space Before Purging .repo Cache ==="
+          df -h /
+          
+          echo "Purging inert .repo cache directory (reclaiming ~30 GB of disk space)..."
+          rm -rf ~/los_workspace/.repo
+          
+          echo "=== Disk Space After Purging .repo Cache (Target: ~90+ GB Free) ==="
+          df -h /
 
       - name: 11. Restore Cloud Compiler Cache (ccache)
         uses: actions/cache/restore@v4
