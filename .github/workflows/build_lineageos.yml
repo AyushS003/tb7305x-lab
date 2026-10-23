@@ -44,27 +44,42 @@ jobs:
 
       - name: 3. Maximize Available Disk Space (Debloat Runner)
         run: |
+          echo "=== Disk Space Before Debloat ==="
+          df -h
+          
+          echo "Stopping container runtimes..."
+          sudo systemctl stop docker.service containerd.service || true
+          
           echo "Purging unnecessary toolchains, SDKs, and container images..."
+          sudo rm -rf /var/lib/docker /var/lib/containerd
+          sudo rm -rf /opt/hostedtoolcache/*
           sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/local/share/android-sdk
           sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/share/swift
           sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/local/share/powershell
           sudo rm -rf /usr/local/share/boost
-          sudo docker image prune --all --force || true
-          sudo docker builder prune --all --force || true
+          
+          echo "Purging unneeded large packages..."
+          sudo apt-get purge -y azure-cli google-cloud-sdk google-cloud-cli microsoft-edge-stable google-chrome-stable firefox powershell mono-runtime libgl1-mesa-dri || true
+          sudo apt-get autoremove -y || true
+          sudo apt-get clean
+          
           echo "=== Disk Space After Debloat ==="
           df -h
 
-      - name: 4. Configure 20 GB Swap Space (36 GB Virtual Memory)
+      - name: 4. Configure 8 GB Swap Space (24 GB Total Virtual Memory)
         run: |
-          SWAP_FILE="/mnt/build_swapfile_20g"
+          SWAP_FILE="/mnt/build_swapfile_8g"
           sudo swapoff -a || true
           sudo rm -f /swapfile /mnt/build_swapfile_* "${SWAP_FILE}" || true
-          sudo fallocate -l 20G "${SWAP_FILE}" || sudo dd if=/dev/zero of="${SWAP_FILE}" bs=1M count=20480
+          sudo fallocate -l 8G "${SWAP_FILE}" || sudo dd if=/dev/zero of="${SWAP_FILE}" bs=1M count=8192
           sudo chmod 600 "${SWAP_FILE}"
           sudo mkswap "${SWAP_FILE}"
           sudo swapon "${SWAP_FILE}"
-          echo "=== Active Memory & Swap (36 GB Total Virtual Memory) ==="
+          echo "=== Active Memory & Swap (24 GB Total Virtual Memory) ==="
           free -h
 
       - name: 5. Set up Java 8 Toolchain
@@ -164,7 +179,7 @@ jobs:
           export USE_CCACHE=1
           export CCACHE_EXEC=/usr/bin/ccache
           export CCACHE_DIR=$HOME/.ccache
-          ccache -M 10G
+          ccache -M 5G
           ccache -o compression=true
           ccache -z
           ccache -s
@@ -172,11 +187,50 @@ jobs:
           source build/envsetup.sh
           lunch lineage_mt8765_P-userdebug
           
+          # Start background telemetry watchdog (every 2 minutes)
+          (
+            while true; do
+              sleep 120
+              echo ">>> [WATCHDOG $(date -u '+%Y-%m-%d %H:%M:%S UTC')] Disk Free: $(df -h / | awk 'NR==2 {print $4}') | RAM Avail: $(free -h | awk 'NR==2 {print $7}') | Swap Free: $(free -h | awk 'NR==3 {print $4}')"
+            done
+          ) &
+          WATCHDOG_PID=$!
+          
+          cleanup() {
+            local exit_code=$?
+            kill $WATCHDOG_PID 2>/dev/null || true
+            if [ $exit_code -ne 0 ]; then
+              echo "=========================================================="
+              echo "!!! BUILD TERMINATED WITH EXIT CODE $exit_code !!!"
+              echo "=========================================================="
+              echo ">>> DISK USAGE AT FAILURE:"
+              df -h /
+              echo ">>> MEMORY USAGE AT FAILURE:"
+              free -h
+              echo ">>> LAST 80 LINES OF BUILD LOG:"
+              tail -n 80 $GITHUB_WORKSPACE/build.log 2>/dev/null || true
+              echo ">>> FILTERED COMPILER / BUILD ERRORS:"
+              grep -E "(error:|FAILED:|ninja: build stopped)" $GITHUB_WORKSPACE/build.log 2>/dev/null | tail -n 40 || true
+            fi
+            exit $exit_code
+          }
+          trap cleanup EXIT
+          
           TARGET="${{ github.event.inputs.build_target || 'boot_and_system' }}"
           echo "Starting compilation for target: $TARGET"
           
           if [ "$TARGET" == "boot_and_system" ]; then
-            make -j$(nproc) bootimage systemimage 2>&1 | tee $GITHUB_WORKSPACE/build.log
+            echo "=========================================================="
+            echo ">>> PHASE 1: Compiling bootimage"
+            echo "=========================================================="
+            make -j$(nproc) bootimage 2>&1 | tee $GITHUB_WORKSPACE/build.log
+            echo ">>> bootimage compilation successful! Current disk space:"
+            df -h /
+            
+            echo "=========================================================="
+            echo ">>> PHASE 2: Compiling systemimage"
+            echo "=========================================================="
+            make -j$(nproc) systemimage 2>&1 | tee -a $GITHUB_WORKSPACE/build.log
           elif [ "$TARGET" == "boot_only" ]; then
             make -j$(nproc) bootimage 2>&1 | tee $GITHUB_WORKSPACE/build.log
           elif [ "$TARGET" == "system_only" ]; then
@@ -246,6 +300,7 @@ jobs:
         with:
           name: lineageos-16.0-mt8765_P-${{ github.run_id }}
           path: artifacts/
+          if-no-files-found: warn
           retention-days: 90
 
       - name: 15. Publish Release (Optional)
