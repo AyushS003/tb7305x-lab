@@ -93,10 +93,14 @@ jobs:
           sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=20
           sudo apt-get install -y --no-install-recommends \
             bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
-            git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev \
+            git git-lfs gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev \
             liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 \
             libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc \
             zip zlib1g-dev python2 python3
+          
+          # Initialize git-lfs globally
+          sudo git lfs install --system
+          git lfs install
           
           # Force system python to python2 for AOSP 9 build system compatibility
           sudo ln -sf /usr/bin/python2 /usr/bin/python
@@ -117,7 +121,7 @@ jobs:
         run: |
           mkdir -p ~/los_workspace
           cd ~/los_workspace
-          repo init -u https://github.com/LineageOS/android.git -b lineage-16.0 --depth=1
+          repo init -u https://github.com/LineageOS/android.git -b lineage-16.0 --git-lfs --depth=1
           repo sync -c --no-clone-bundle --no-tags --force-sync -j$(nproc)
 
       - name: 9. Stage Device and Vendor Trees
@@ -144,6 +148,9 @@ jobs:
             echo "Applying patched framework sources from repository..."
             cp -rf $GITHUB_WORKSPACE/source/rom/frameworks/* frameworks/
           fi
+          
+          echo "Ensuring all prebuilt APKs (WebView) are valid ZIP archives..."
+          python3 $GITHUB_WORKSPACE/scripts/ensure_prebuilt_apks.py ~/los_workspace
           
           echo "Staged trees:"
           ls -la device/lenovo/mt8765_P/
