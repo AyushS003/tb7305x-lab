@@ -88,12 +88,21 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
+          export KCFLAGS="-Wno-error -Wno-error=array-bounds -Wno-error=sizeof-pointer-memaccess -Wno-error=stringop-overflow -Wno-error=misleading-indentation -w"
+
+          # Modern GCC 11+ compatibility: remove -Werror flags from kernel Makefiles
+          echo "Patching Makefiles to disable -Werror on modern GCC..."
+          sed -i 's/-Werror//g' Makefile
+          find arch/arm64/ -name "Makefile*" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
+          find drivers/ -name "Makefile*" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
+          find fs/ -name "Makefile*" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
+          find mm/ -name "Makefile*" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
 
           echo "Configuring kernel with mt8765_halium_defconfig..."
           make mt8765_halium_defconfig
 
-          echo "Compiling kernel Image and device trees using $(nproc) threads..."
-          make -j$(nproc) Image Image.gz dtbs || make -j$(nproc) Image Image.gz || make -j$(nproc) Image
+          echo "Compiling kernel Image using $(nproc) threads..."
+          make -j$(nproc) KCFLAGS="$KCFLAGS" Image Image.gz dtbs || make -j$(nproc) KCFLAGS="$KCFLAGS" Image Image.gz || make -j$(nproc) KCFLAGS="$KCFLAGS" Image
 
           echo "=== Kernel Build Complete ==="
           ls -lh arch/arm64/boot/Image* || true
