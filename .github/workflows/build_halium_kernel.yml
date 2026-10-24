@@ -56,7 +56,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential bc bison flex libssl-dev libelf-dev \
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
-            device-tree-compiler cpio python3 python3-pip \
+            device-tree-compiler cpio python3 python3-pip python2 \
             libncurses5-dev libncursesw5-dev kmod u-boot-tools \
             curl tar
           pip3 install --upgrade setuptools
@@ -117,21 +117,9 @@ jobs:
             sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' scripts/dtc/dtc-lexer-lex.c || true
           fi
 
-          # Dynamically discover all MT6739 and common MediaTek driver include paths
-          python3 -c "
-          import os
-          include_dirs = []
-          for root in ['drivers/misc/mediatek', 'drivers/power/mediatek', 'drivers/mmc/host/mediatek']:
-              if not os.path.isdir(root): continue
-              for dirpath, _, filenames in os.walk(root):
-                  if any(f.endswith('.h') for f in filenames):
-                      parts = dirpath.replace('\\\\', '/').split('/')
-                      if not any(p in ['mt6771', 'mt6775', 'mt6763', 'mt6799', 'mt6757', 'mt6758', 'mt6779', 'mt6785', 'mt6885'] for p in parts):
-                          include_dirs.append('-I\$(srctree)/' + dirpath.replace('\\\\', '/'))
-          with open('Makefile', 'a') as f:
-              f.write('\nexport MTK_PLATFORM := mt6739\n')
-              f.write('KBUILD_CFLAGS += -w -Wno-error ' + ' '.join(include_dirs) + '\n')
-          "
+          # MediaTek MT6739 / MT8765 Platform Includes & Driver Fixes
+          echo "export MTK_PLATFORM := mt6739" >> Makefile
+          echo "KBUILD_CFLAGS += -w -Wno-error -I\$(srctree)/drivers/mmc/host/mediatek/ComboA -I\$(srctree)/drivers/mmc/host/mediatek/ComboA/mt6739 -I\$(srctree)/drivers/misc/mediatek/base/power/spm_v4 -I\$(srctree)/drivers/misc/mediatek/base/power/ppm_v3/src/mach/mt6739 -I\$(srctree)/drivers/misc/mediatek/base/power/ppm_v3/inc -I\$(srctree)/drivers/misc/mediatek/base/power/include -I\$(srctree)/drivers/misc/mediatek/cmdq/v3 -I\$(srctree)/drivers/misc/mediatek/cmdq/v3/mt6739 -I\$(srctree)/drivers/misc/mediatek/eccci -I\$(srctree)/drivers/misc/mediatek/eccci/mt6739 -I\$(srctree)/drivers/power/mediatek/battery -I\$(srctree)/drivers/power/mediatek/charger -I\$(srctree)/drivers/power/mediatek/misc -I\$(srctree)/drivers/misc/mediatek/include/mt-plat/mt6739/include -I\$(srctree)/drivers/misc/mediatek/include/mt-plat" >> Makefile
 
           # Fix quoted $(CONFIG_MTK_PLATFORM) inside ppm_v3 Makefile
           if [ -f "drivers/misc/mediatek/base/power/ppm_v3/src/Makefile" ]; then
