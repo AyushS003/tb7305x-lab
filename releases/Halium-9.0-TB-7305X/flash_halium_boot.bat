@@ -17,11 +17,16 @@ if /i not "%CONFIRM%"=="YES" (
     exit /b 0
 )
 
+set "FASTBOOT_BIN=fastboot"
 where fastboot >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [ERROR] 'fastboot' was not found in your system PATH.
-    pause
-    exit /b 1
+    if exist "C:\Users\ayush\Downloads\platform-tools-latest-windows\platform-tools\fastboot.exe" (
+        set "FASTBOOT_BIN=C:\Users\ayush\Downloads\platform-tools-latest-windows\platform-tools\fastboot.exe"
+    ) else (
+        echo [ERROR] 'fastboot' was not found in your system PATH or platform-tools folder.
+        pause
+        exit /b 1
+    )
 )
 
 if not exist "%~dp0halium-boot.img" (
@@ -31,7 +36,7 @@ if not exist "%~dp0halium-boot.img" (
 )
 
 echo [*] Flashing boot partition with halium-boot.img...
-fastboot flash boot "%~dp0halium-boot.img"
+%FASTBOOT_BIN% flash boot "%~dp0halium-boot.img"
 
 if %errorlevel% neq 0 (
     echo.
@@ -42,7 +47,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [*] Rebooting tablet into Halium 9.0...
-fastboot reboot
+%FASTBOOT_BIN% reboot
 
 echo.
 echo ================================================================

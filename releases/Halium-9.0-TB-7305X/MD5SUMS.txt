@@ -1,5 +1,1 @@
-f32c6fe06209b98bf71d7796ee4065f6  Image
-7bcddb5884e70384be9650a05adbca8d  SHA256SUMS.txt
-d787e5d1565d6922c5f0a23cb105052f  dtbo.img
-79faf6b804874d819308452d2d399202  halium-boot.img
-b36d9705bf19acf0d027d1744f06cd64  initrd.img
+8ca2d87293e9318b81fcfdf4828d8682  halium-boot.img

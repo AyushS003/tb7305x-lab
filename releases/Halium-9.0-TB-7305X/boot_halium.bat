@@ -13,12 +13,16 @@ echo    1. USB Cable connected to PC
 echo    2. Device in FASTBOOT mode ("FASTBOOT mode..." on screen)
 echo.
 
+set "FASTBOOT_BIN=fastboot"
 where fastboot >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [ERROR] 'fastboot' was not found in your system PATH.
-    echo Please install Android platform-tools or add fastboot.exe to PATH.
-    pause
-    exit /b 1
+    if exist "C:\Users\ayush\Downloads\platform-tools-latest-windows\platform-tools\fastboot.exe" (
+        set "FASTBOOT_BIN=C:\Users\ayush\Downloads\platform-tools-latest-windows\platform-tools\fastboot.exe"
+    ) else (
+        echo [ERROR] 'fastboot' was not found in your system PATH or platform-tools folder.
+        pause
+        exit /b 1
+    )
 )
 
 if not exist "%~dp0halium-boot.img" (
@@ -28,11 +32,11 @@ if not exist "%~dp0halium-boot.img" (
 )
 
 echo [*] Checking fastboot device connection...
-fastboot devices
+%FASTBOOT_BIN% devices
 echo.
 
 echo [*] Booting Halium 9.0 live kernel into device RAM...
-fastboot boot "%~dp0halium-boot.img"
+%FASTBOOT_BIN% boot "%~dp0halium-boot.img"
 
 if %errorlevel% neq 0 (
     echo.
