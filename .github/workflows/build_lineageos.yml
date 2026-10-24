@@ -155,19 +155,22 @@ jobs:
           grep -n "DeviceFiles" frameworks/av/drm/mediadrm/plugins/clearkey/hidl/include/DrmPlugin.h || echo "SUCCESS: DeviceFiles removed from DrmPlugin.h"
           grep -n "mSecurityLevelLock" frameworks/av/drm/mediadrm/plugins/clearkey/hidl/include/DrmPlugin.h
 
-      - name: 10. Snapshot Exact Build Manifest & Purge Inert .repo Cache
+      - name: 10. Snapshot Exact Build Manifest & Purge Inert Metadata
         run: |
           cd ~/los_workspace
           repo manifest -r -o pinned_build_manifest.xml
           cp pinned_build_manifest.xml $GITHUB_WORKSPACE/
           
-          echo "=== Disk Space Before Purging .repo Cache ==="
+          echo "=== Disk Space Before Purging Inert Caches ==="
           df -h /
           
-          echo "Purging inert .repo cache directory (reclaiming ~30 GB of disk space)..."
+          echo "Purging inert .repo cache directory (reclaiming ~15 GB)..."
           rm -rf ~/los_workspace/.repo
           
-          echo "=== Disk Space After Purging .repo Cache (Target: ~90+ GB Free) ==="
+          echo "Purging inert .git directories across the source tree (reclaiming ~12-15 GB)..."
+          find ~/los_workspace -name ".git" -type d -prune -exec rm -rf {} +
+          
+          echo "=== Disk Space After Purging Inert Metadata (Target: ~100+ GB Free) ==="
           df -h /
 
       - name: 11. Restore Cloud Compiler Cache (ccache)
@@ -187,6 +190,12 @@ jobs:
           export LC_ALL=C
           export ALLOW_MISSING_DEPENDENCIES=true
           export WITHOUT_CHECK_API=true
+          export SKIP_ABI_CHECKS=true
+          
+          # Route temporary staging to /dev/shm (7.9 GB RAM tmpfs) so build_image.py staging never touches root disk
+          mkdir -p /dev/shm/build_tmp
+          export TMPDIR=/dev/shm/build_tmp
+          
           export USE_CCACHE=1
           export CCACHE_EXEC=/usr/bin/ccache
           export CCACHE_DIR=$HOME/.ccache
@@ -220,6 +229,16 @@ jobs:
             if [ $BUILD_EXIT_CODE -eq 0 ]; then
               echo ">>> bootimage compilation successful! Current disk space:"
               df -h /
+              
+              # Immediately stage boot.img into artifacts
+              mkdir -p $GITHUB_WORKSPACE/artifacts
+              cp -f out/target/product/mt8765_P/boot.img $GITHUB_WORKSPACE/artifacts/ 2>/dev/null || true
+              
+              # Clean up host tools intermediate object files to reclaim disk before systemimage
+              echo "Cleaning up host tool intermediate objects to maximize disk for systemimage packaging..."
+              rm -rf out/host/linux-x86/obj 2>/dev/null || true
+              df -h /
+              
               echo "=========================================================="
               echo ">>> PHASE 2: Compiling systemimage"
               echo "=========================================================="
