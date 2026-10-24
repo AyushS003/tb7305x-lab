@@ -1,0 +1,7 @@
+c3280a3e5268f237025004ac912cdbbf  recovery.img
+ccafa8af6af14a7a020cd7bda5acdb32  boot.img
+b77c8956c4f10958b6260c2eac7c62b9  system.img
+6be1ac6357c3e9dd654d242bcdc6be9a  flash_rom.bat
+a309ba3e8017a554d6ef47b859c8dab5  flash_rom.sh
+30a14c1b40971dfc8543af2ddb07f25e  README.md
+734f0773bc5481dae2628f61f0457771  INSTRUCTIONS.txt

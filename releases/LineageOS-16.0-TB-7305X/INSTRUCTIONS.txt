@@ -1,0 +1,59 @@
+================================================================================
+  Lenovo Tab M7 (TB-7305X) LineageOS 16.0 & TWRP 3.3.1 Installation Guide
+================================================================================
+
+PREREQUISITES:
+1. Charge your tablet to at least 50%.
+2. Backup all personal data (installing custom ROM will completely wipe the tablet).
+3. Have Android Platform Tools (adb & fastboot) installed on your PC.
+
+--------------------------------------------------------------------------------
+STEP 1: UNLOCK THE BOOTLOADER
+--------------------------------------------------------------------------------
+1. In the tablet Settings -> About Tablet -> Tap "Build Number" 7 times.
+2. In Settings -> System -> Developer Options:
+   - Turn ON "OEM Unlocking"
+   - Turn ON "USB Debugging"
+3. Connect the tablet to your computer via USB cable.
+4. Open Command Prompt or Terminal on your PC and run:
+     adb reboot bootloader
+5. Once your tablet screen shows "FASTBOOT mode...", run:
+     fastboot flashing unlock
+6. On the tablet, press the Volume Up button to confirm the unlock.
+   (The tablet will format data and reboot).
+
+--------------------------------------------------------------------------------
+STEP 2: FLASH LINEAGEOS 16.0 & TWRP
+--------------------------------------------------------------------------------
+1. Put the tablet back into Fastboot mode:
+     adb reboot bootloader
+2. On Windows:
+   Double-click "flash_rom.bat" to automatically flash recovery, boot, and system.
+
+   On Linux/macOS:
+   Run: chmod +x flash_rom.sh && ./flash_rom.sh
+
+   Or manually run these commands:
+     fastboot flash recovery recovery.img
+     fastboot flash boot boot.img
+     fastboot flash system system.img
+
+--------------------------------------------------------------------------------
+STEP 3: FORMAT DATA IN TWRP (MANDATORY TO REMOVE STOCK ENCRYPTION)
+--------------------------------------------------------------------------------
+1. From Fastboot, boot directly into TWRP Recovery:
+     fastboot reboot recovery
+   (Or power off the tablet and hold Power + Volume Up until TWRP opens).
+2. Swipe the slider at the bottom to allow modifications.
+3. Tap "Wipe" -> tap "Format Data" -> type "yes" and tap the checkmark.
+4. Tap back -> tap "Advanced Wipe" -> select "Dalvik / ART Cache" and "Cache" -> swipe to wipe.
+5. Tap "Reboot" -> tap "System".
+
+--------------------------------------------------------------------------------
+STEP 4: FIRST BOOT
+--------------------------------------------------------------------------------
+- The first boot takes 2 to 3 minutes while the system compiles bytecode.
+- You will be greeted by the LineageOS Setup Wizard!
+- Performance optimizations (0.5x animations, 4GB virtual swap, deadline scheduler)
+  will activate automatically. Enjoy your clean, fast tablet!
+================================================================================

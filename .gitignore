@@ -12,6 +12,7 @@ firmware/
 # CI / local build outputs
 artifacts/
 builds/
+releases/**/*.img
 out/
 build.log
 *.log
