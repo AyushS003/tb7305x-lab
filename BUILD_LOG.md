@@ -302,9 +302,67 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
    - **Maximum Timeout**: Increased `timeout-minutes` from 240 to **360 minutes (6.0 hours)**, the maximum limit permitted on GitHub Actions runners.
    - **Package Mirror Optimization**: Configured `apt-get` with retries, fast socket timeouts (`Acquire::http::Timeout=20`), and `--no-install-recommends` to prevent toolchain installation stalls.
    - **Deterministic Cloud Caching**: Split `actions/cache` into explicit `actions/cache/restore@v4` and an unconditional `actions/cache/save@v4` with `if: always()`, guaranteeing all accumulated object files are saved to GitHub cloud cache even on cancellation or timeout.
-   - **Fail-Safe Artifact Upload**: Configured Step 13 (partition audit) and Step 14 (artifact upload) with `if: always()` to ensure `build.log` and partial image outputs are preserved in every execution.
+    - **Fail-Safe Artifact Upload**: Configured Step 13 (partition audit) and Step 14 (artifact upload) with `if: always()` to ensure `build.log` and partial image outputs are preserved in every execution.
 
+---
 
+## 14. 100% CI Compilation & Image Packaging Victory (Run #10: 40065716148)
 
+1. **Root-Cause Analysis of Prior CI Aborts**:
+   - **Runs #7 & #8 (Truncated Logs & Crash)**: The build host root partition (`/dev/root`) reached 0 bytes free at ~87% compilation. The GitHub Actions runner agent crashed (`System.IO.IOException: No space left on device`), dropping post-steps and folding errors into generic `--- ERROR ---` markers.
+   - **Run #9 (Packaging Failure)**: `build_image.py` used Python's default `tempfile.mkdtemp()` on `/tmp` to stage the 3.5 GB system filesystem tree, exhausting the remaining 8.4 GB root disk buffer (`shutil.Error: [Errno 28] No space left on device`).
+2. **Comprehensive Build Scaling Fixes Implemented**:
+   - Purged `.repo` cache (+15 GB disk headroom) and all project `.git` trees (+14 GB).
+   - Routed temporary packaging trees to RAM tmpfs via `TMPDIR=/dev/shm/build_tmp` (+3.5 GB).
+   - Disabled redundant ABI dump checks (`SKIP_ABI_CHECKS=true`, +5 GB).
+   - Reclaimed host compiler objects (`out/host/linux-x86/obj`, +4 GB).
+3. **Run #10 Results**:
+   - **Status**: **100% COMPLETED (SUCCESS)** across all 101,423 Ninja tasks in 51m 04s.
+   - **Artifact**: `lineageos-16.0-mt8765_P-40065716148` (677 MB zip) containing complete build log, manifest, and verified partition images:
+     - `boot.img`: 8,611,840 bytes (fits 16 MiB partition with +8.16 MiB margin, SHA-256 `609A1DB8...`).
+     - `system.img`: 1,401,127,252 bytes sparse ext4 (uncompressed geometry: 950,272 blocks × 4096 = 3,892,314,112 bytes, 100% hardware boundary match, SHA-256 `5669FC2F...`).
 
+---
 
+## 15. Initial Boot Diagnostics & Deep Root-Cause Resolutions
+
+1. **Diagnostic 1 — SELinux CIL Dynamic Compilation Conflict**:
+   - *Symptom*: Kernel booted rootfs and started `/init`, but immediately rebooted to bootloader at 4.20s:
+     `init: /system/bin/secilc: Problems processing genfscon rules` -> `Failed to compile cildb: -1` -> `init: Unable to load SELinux policy` -> `rebootTarget: bootloader`.
+   - *Root Cause*: Stock vendor policy (`vendor_sepolicy.cil`) defined duplicate OEM types (`proc_slabinfo`, `proc_last_kmsg`, `proc_cpu_alignment`) and duplicate `genfscon` rules that conflicted with AOSP platform policy. Because the SHA-256 fingerprint in `/system/etc/selinux/plat_and_mapping_sepolicy.cil.sha256` differed from vendor's expected hash, `init` attempted dynamic recompilation via `secilc` and failed.
+   - *Resolution*: Synchronized `/system/etc/selinux/plat_and_mapping_sepolicy.cil.sha256` with `/vendor/etc/selinux/precompiled_sepolicy.plat_and_mapping.sha256` (`b97a0892...`), enabling `init` to load the verified `precompiled_sepolicy` instantly in 10ms.
+2. **Diagnostic 2 — Property Area Serialization Failure**:
+   - *Symptom*: Second-stage `init` crashed at 2.51s:
+     `SELinux: Context u:object_r:userinit_prop:s0 is not valid (left unmapped)` -> `init: Failed to initialize property area` -> `rebootTarget: bootloader`.
+   - *Root Cause*: `plat_property_contexts` included Lineage-specific properties (`userinit_prop`, `lineage_recovery_prop`, `exported_audio_prop`) unrecognized by the vendor precompiled policy, causing `property_info_serializer` validation to reject the property trie.
+   - *Resolution*: Mapped unmapped properties to valid platform contexts (`default_prop` and `audio_prop`) in `/system/etc/selinux/plat_property_contexts`.
+3. **Diagnostic 3 — FDE Force-Encryption Deadlock**:
+   - *Symptom*: Boot animation played indefinitely while `/data` remained unmounted.
+   - *Root Cause*: `/vendor/etc/fstab.mt6739` and `fstab.mt8765` configured `forcefdeorfbe=/dev/block/platform/bootdevice/by-name/metadata`. On clean unencrypted data, `vold` attempted to force Full Disk Encryption, hanging indefinitely on TrustZone Keymaster handshake.
+   - *Resolution*: Converted `forcefdeorfbe=` to `encryptable=`, allowing clean unencrypted ext4 data mounting without encryption deadlocks.
+4. **Diagnostic 4 — Missing `/cache` Mountpoint Directory in Rootfs**:
+   - *Symptom*: `init: [libfs_mgr]Failed to mount an un-encryptable or wiped partition on /dev/block/platform/bootdevice/by-name/cache at /cache: No such file or directory` -> `queue_fs_event() failed: Invalid code: 255`.
+   - *Root Cause*: In System-As-Root, `/cache` was staged as a broken symlink pointing to non-existent `/data/cache`. The `mount()` syscall returned `ENOENT`, failing `mount_all` and preventing `init` from ever evaluating `property:ro.crypto.state=unencrypted` or triggering `zygote-start`.
+   - *Resolution*: Replaced the symlink with a real `/cache` mountpoint directory (`drwxrwx--- 2 system cache`), formatted `/cache` ext4, and verified clean mounting.
+
+---
+
+## 16. Successful Physical Boot & Hardware Subsystem Verification
+
+1. **Full Userspace Initialization**:
+   - `adbd` initialized at early boot with root shell access (`ro.adb.secure=0`, `persist.sys.usb.config=mtp,adb`).
+   - `zygote64` (PID 324) and `zygote` (PID 325) successfully spawned.
+   - `system_server` (PID 766) started all 69 core platform services (`WindowManager`, `ActivityManager`, `PackageManager`, `DisplayManager`, `InputManager`, `AudioPolicy`).
+   - `dex2oat` completed ahead-of-time bytecode compilation for `TrebuchetQuickStep.apk`, `BlockedNumberProvider`, and contacts providers.
+   - `sys.boot_completed` asserted `1`.
+2. **Interactive UI Reached**:
+   - Focused Activity: `org.lineageos.setupwizard/org.lineageos.setupwizard.WelcomeActivity` (Setup Wizard).
+   - Display Geometry: Native 600×1024 at 160 dpi running on PowerVR Rogue GE8100 GPU with zero tearing or graphical glitches.
+   - Live screenshot captured and verified at [`builds/lineage_first_boot_screen.png`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/builds/lineage_first_boot_screen.png).
+3. **Hardware Telemetry Verified**:
+   - **Display / GPU**: PowerVR Rogue GE8100 DDK 1.10 EGL drivers (`/vendor/lib64/egl/libEGL_mtk.so`, `libGLESv2_mtk.so`) running SurfaceFlinger.
+   - **Touchscreen**: `mtk-tpd` capacitive multitouch online with proper event bindings.
+   - **Keys**: `mtk-kpd` power and volume buttons fully operational.
+   - **Battery**: State of Charge 100%, 4073 mV, health GOOD, charging controller functional.
+   - **Memory & Swap**: 1.9 GB physical RAM with 1.0 GB zRAM swap initialized.
+   - **Partitions**: System-as-root (3.5 GB, 37% used), Vendor (381 MB, 89% used), Data (24 GB ext4 unencrypted, 1% used), Cache (185 MB ext4, 1% used).
