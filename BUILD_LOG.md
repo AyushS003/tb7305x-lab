@@ -366,3 +366,50 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
    - **Battery**: State of Charge 100%, 4073 mV, health GOOD, charging controller functional.
    - **Memory & Swap**: 1.9 GB physical RAM with 1.0 GB zRAM swap initialized.
    - **Partitions**: System-as-root (3.5 GB, 37% used), Vendor (381 MB, 89% used), Data (24 GB ext4 unencrypted, 1% used), Cache (185 MB ext4, 1% used).
+
+---
+
+## 17. Dual-Tier Storage Swap & Performance Optimization (Option 1)
+
+1. **Storage Swap Architecture**:
+   - **Tier 1 (In-Memory zRAM - Priority 10)**:
+     - 1,048,572 KB (~1.0 GB) compressed RAM using the LZ4 compression algorithm.
+     - Operates at RAM/CPU cache speeds (~GB/s throughput, nanosecond latency).
+     - Prioritized with `swapon -p 10 /dev/block/zram0` so the Linux kernel always saturates compressed RAM before writing to persistent storage.
+   - **Tier 2 (Flash Storage Swapfile - Priority 5)**:
+     - 1,048,572 KB (~1.0 GB) dedicated swapfile created on ext4 flash storage at `/data/swapfile`.
+     - Initialized with `dd if=/dev/zero of=/data/swapfile bs=1048576 count=1024` and formatted with `mkswap`.
+     - Secured with `chmod 600` and activated with `swapon -p 5 /data/swapfile`.
+     - Serves as an emergency overflow safety net when memory-intensive apps or browser tabs exceed 3 GB total allocation, preventing aggressive Out-Of-Memory (OOM) background kills while shielding the eMMC flash from frequent write cycles.
+   - **Total Addressable Memory**:
+     - Physical RAM: 1,900 MB
+     - Active Swap: 2,047 MB (1.0 GB zRAM + 1.0 GB storage swap)
+     - Total System Virtual Address Space: ~4.0 GB
+
+2. **Kernel Virtual Memory (VM) Latency & Cache Tuning**:
+   - `swappiness = 80`: Balances pagecache reclamation with anonymous memory swapping.
+   - `vfs_cache_pressure = 50`: Decreases directory and inode eviction frequency, keeping directory hierarchies cached in memory for significantly faster file operations and launcher responsiveness.
+   - `dirty_ratio = 15` & `dirty_background_ratio = 5`: Lowers the writeback threshold to flush dirty memory pages to flash in small background batches, preventing long I/O write freezes during heavy app installations or multi-tasking.
+   - `page-cluster = 0`: Disables sequential readahead clustering (reads 1 page per swap-in instead of 8 clustered pages), minimizing flash and zRAM I/O latency on random page faults.
+
+3. **UI Responsiveness & Animation Speedups**:
+   - `window_animation_scale = 0.5`
+   - `transition_animation_scale = 0.5`
+   - `animator_duration_scale = 0.5`
+   - Halves animation transition times, giving the tablet an instantaneous, snappy feel when launching applications and switching activities.
+   - `sys.use_fifo_ui = 1`: Prioritizes the SystemUI and render threads using real-time scheduling.
+
+4. **Persistence & Initialization Daemon**:
+   - Staged automated service: [`source/rom/device/lenovo/mt8765_P/rootdir/etc/init_perf.rc`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/device/lenovo/mt8765_P/rootdir/etc/init_perf.rc)
+   - Executable daemon: [`source/rom/device/lenovo/mt8765_P/rootdir/bin/init_perf.sh`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/device/lenovo/mt8765_P/rootdir/bin/init_perf.sh)
+   - Registered in [`source/rom/device/lenovo/mt8765_P/rootdir/Android.mk`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/device/lenovo/mt8765_P/rootdir/Android.mk) and [`source/rom/device/lenovo/mt8765_P/device.mk`](file:///e:/Project/Lenovo%20Tab%20tb-7305x/tb7305x-lab/source/rom/device/lenovo/mt8765_P/device.mk).
+   - Installed to physical rootfs at `/system/bin/init_perf.sh` and `/system/etc/init/init_perf.rc`.
+   - Verified across full reboot (`adb reboot`):
+     ```text
+     Filename                                Type            Size    Used    Priority
+     /dev/block/zram0                        partition       1048572 0       10
+     /data/swapfile                          file            1048572 0       5
+     Mem:             1900 MB
+     Swap:            2047 MB
+     init.svc.init_perf: stopped (status 0)
+     ```

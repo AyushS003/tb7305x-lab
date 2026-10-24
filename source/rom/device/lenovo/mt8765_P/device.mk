@@ -38,6 +38,8 @@ PRODUCT_PACKAGES += \
     meta_init.project.rc \
     meta_init.rc \
     multi_init.rc \
+    init_perf.sh \
+    init_perf.rc
 
 # Soong namespaces
 PRODUCT_SOONG_NAMESPACES += \
