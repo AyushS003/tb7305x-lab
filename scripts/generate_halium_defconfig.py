@@ -8,8 +8,11 @@ Takes the working base kernel config and applies mandatory Halium/Ubuntu Touch c
 import os
 import sys
 
-BASE_CONFIG = r"e:\Project\Lenovo Tab tb-7305x\tb7305x-lab\scratch\kernel_config.txt"
-OUTPUT_DEFCONFIG = r"e:\Project\Lenovo Tab tb-7305x\tb7305x-lab\source\rom\device\lenovo\mt8765_P\halium_defconfig"
+BASE_CONFIG = sys.argv[1] if len(sys.argv) > 1 else (
+    r"scratch/k39tv1_64_bsp_defconfig" if os.path.exists("scratch/k39tv1_64_bsp_defconfig")
+    else r"source/rom/device/lenovo/mt8765_P/halium_defconfig"
+)
+OUTPUT_DEFCONFIG = sys.argv[2] if len(sys.argv) > 2 else r"source/rom/device/lenovo/mt8765_P/halium_defconfig"
 
 MANDATORY_HALIUM_CONFIGS = {
     # Namespaces & Containers (LXC)

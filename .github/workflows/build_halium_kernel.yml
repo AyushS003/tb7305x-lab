@@ -124,7 +124,7 @@ jobs:
           make HOSTCFLAGS="-fcommon" mt8765_halium_defconfig
 
           echo "Compiling kernel Image using $(nproc) threads..."
-          make -j$(nproc) HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error" Image Image.gz dtbs || \
+          make -j$(nproc) HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error" Image.gz-dtb Image Image.gz dtbs || \
           make -j$(nproc) HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error" Image Image.gz || \
           make -j$(nproc) HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error" Image
 
