@@ -17,10 +17,10 @@ on:
         description: 'Cross-Compiler Toolchain'
         required: true
         type: choice
-        default: 'gcc-aarch64'
+        default: 'aosp-gcc-4.9'
         options:
+          - 'aosp-gcc-4.9'
           - 'gcc-aarch64'
-          - 'clang'
       upload_release:
         description: 'Publish Artifact as GitHub Release'
         required: false
@@ -57,8 +57,17 @@ jobs:
             build-essential bc bison flex libssl-dev libelf-dev \
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
             device-tree-compiler cpio python3 python3-pip \
-            libncurses5-dev libncursesw5-dev kmod u-boot-tools
+            libncurses5-dev libncursesw5-dev kmod u-boot-tools \
+            curl tar
           pip3 install --upgrade setuptools
+
+          if [ "${{ github.event.inputs.compiler_type }}" = "aosp-gcc-4.9" ]; then
+            echo "Setting up official Google AOSP GCC 4.9 toolchain (Android Pie)..."
+            mkdir -p $HOME/toolchain/aarch64 $HOME/toolchain/arm32
+            curl -sSL "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/pie-release.tar.gz" | tar -xz -C $HOME/toolchain/aarch64
+            curl -sSL "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/pie-release.tar.gz" | tar -xz -C $HOME/toolchain/arm32
+            echo "[OK] AOSP GCC 4.9 toolchain installed."
+          fi
 
       - name: 4. Verify Halium 9 Kernel Configuration Compliance
         run: |
@@ -87,22 +96,47 @@ jobs:
           cd kernel_src
           export ARCH=arm64
           export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export KCFLAGS="-Wno-error -Wno-error=array-bounds -Wno-error=sizeof-pointer-memaccess -Wno-error=stringop-overflow -Wno-error=misleading-indentation -w"
 
-          # Modern GCC 11+ compatibility: remove -Werror flags from kernel Makefiles
-          echo "Patching Makefiles to disable -Werror on modern GCC..."
-          sed -i 's/-Werror//g' Makefile
-          find arch/arm64/ -name "Makefile*" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
-          find drivers/ -name "Makefile*" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
-          find fs/ -name "Makefile*" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
-          find mm/ -name "Makefile*" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
+          if [ "${{ github.event.inputs.compiler_type }}" = "aosp-gcc-4.9" ]; then
+            export PATH="$HOME/toolchain/aarch64/bin:$HOME/toolchain/arm32/bin:$PATH"
+            export CROSS_COMPILE=aarch64-linux-android-
+            export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+            echo "Using Google AOSP GCC 4.9 cross-compiler:"
+            aarch64-linux-android-gcc --version | head -n 1
+          else
+            export CROSS_COMPILE=aarch64-linux-gnu-
+            echo "Using system GCC cross-compiler:"
+            aarch64-linux-gnu-gcc --version | head -n 1
+          fi
+
+          # Modern host GCC compatibility: fix yylloc multiple definitions in host dtc
+          if [ -f "scripts/dtc/dtc-lexer.l_shipped" ]; then
+            sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' scripts/dtc/dtc-lexer.l_shipped || true
+          fi
+          if [ -f "scripts/dtc/dtc-lexer-lex.c" ]; then
+            sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' scripts/dtc/dtc-lexer-lex.c || true
+          fi
+
+          # Disable -Werror flags cleanly across Makefiles and Kbuild
+          python3 -c "
+          import glob, re
+          for f in glob.glob('**/Makefile*', recursive=True) + glob.glob('**/Kbuild*', recursive=True):
+              try:
+                  with open(f, 'r', encoding='utf-8', errors='ignore') as fp: c = fp.read()
+                  c = c.replace('-Werror-implicit-function-declaration', '-Wno-implicit-function-declaration')
+                  c = re.sub(r'-Werror=[^\s]+', '', c)
+                  c = re.sub(r'-Werror\b', '', c)
+                  with open(f, 'w', encoding='utf-8') as fp: fp.write(c)
+              except Exception: pass
+          "
 
           echo "Configuring kernel with mt8765_halium_defconfig..."
-          make mt8765_halium_defconfig
+          make HOSTCFLAGS="-fcommon" mt8765_halium_defconfig
 
           echo "Compiling kernel Image using $(nproc) threads..."
-          make -j$(nproc) KCFLAGS="$KCFLAGS" Image Image.gz dtbs || make -j$(nproc) KCFLAGS="$KCFLAGS" Image Image.gz || make -j$(nproc) KCFLAGS="$KCFLAGS" Image
+          make -j$(nproc) HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error" Image Image.gz dtbs || \
+          make -j$(nproc) HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error" Image Image.gz || \
+          make -j$(nproc) HOSTCFLAGS="-fcommon" KCFLAGS="-Wno-error" Image
 
           echo "=== Kernel Build Complete ==="
           ls -lh arch/arm64/boot/Image* || true
@@ -127,34 +161,49 @@ jobs:
           cp "$KERNEL_BIN" out_halium/Image
           echo "Found kernel binary at: $KERNEL_BIN ($(stat -c%s $KERNEL_BIN) bytes)"
 
-          # Download and prepare mkbootimg tool
-          curl -sSL -o mkbootimg.py https://raw.githubusercontent.com/osm0sis/mkbootimg/master/mkbootimg.py
-          chmod +x mkbootimg.py
-
-          # Extract ramdisk from stock verified boot image
-          python3 -c "
-          import os
-          print('Preparing Halium initramfs staging...')
-          "
+          # Download official Halium 9 continuous arm64 initrd
+          echo "Downloading Halium 9 arm64 continuous initrd..."
+          curl -sSL -o out_halium/initrd.img https://github.com/Halium/initramfs-tools-halium/releases/download/continuous/initrd.img-touch-arm64
+          echo "Initrd size: $(stat -c%s out_halium/initrd.img) bytes"
 
           # Stage Halium bootcmdline
           CMDLINE="bootopt=64S3,32N2,64N2 buildvariant=userdebug systemd.unified_cgroup_hierarchy=0 console=tty0 console=ttyMT0,921600n1 androidboot.selinux=permissive"
 
+          DTBO_FLAG=""
+          if [ -f "source/rom/device/lenovo/mt8765_P/prebuilts/dtbo.img" ]; then
+            echo "Attaching dtbo.img..."
+            cp source/rom/device/lenovo/mt8765_P/prebuilts/dtbo.img out_halium/dtbo.img
+          fi
+
           echo "Creating halium-boot.img with MediaTek MT8765 offsets..."
-          python3 mkbootimg.py \
+          python3 scripts/mkbootimg.py \
             --kernel "$KERNEL_BIN" \
-            --ramdisk builds/ramdisk-recovery.img \
+            --ramdisk out_halium/initrd.img \
             --base 0x40078000 \
+            --kernel_offset 0x00008000 \
             --ramdisk_offset 0x04f88000 \
             --tags_offset 0x03f88000 \
+            --pagesize 2048 \
             --header_version 1 \
             --cmdline "$CMDLINE" \
-            -o out_halium/halium-boot.img || true
+            -o out_halium/halium-boot.img
+
+          echo "Halium boot image created: $(stat -c%s out_halium/halium-boot.img) bytes"
+
+          # Verify halium-boot.img
+          python3 scripts/unpack_bootimg.py --boot_img out_halium/halium-boot.img --out out_halium/verify_unpack
+
+          # Copy DTBs if generated
+          if [ -d "kernel_src/arch/arm64/boot/dts" ]; then
+            mkdir -p out_halium/dtbs
+            find kernel_src/arch/arm64/boot/dts -name "*.dtb" -exec cp {} out_halium/dtbs/ \; 2>/dev/null || true
+          fi
 
           # Generate Checksums
           cd out_halium
-          sha256sum * > SHA256SUMS.txt || true
-          md5sum * > MD5SUMS.txt || true
+          sha256sum * > SHA256SUMS.txt 2>/dev/null || true
+          md5sum * > MD5SUMS.txt 2>/dev/null || true
+          echo "=== Checksums ==="
           cat SHA256SUMS.txt
 
       - name: 9. Upload Halium Kernel Artifacts
