@@ -59,13 +59,18 @@ jobs:
             device-tree-compiler cpio python3 python3-pip python2 \
             libncurses5-dev libncursesw5-dev kmod u-boot-tools \
             curl tar
-          pip3 install --upgrade setuptools
 
           if [ "${{ github.event.inputs.compiler_type }}" = "aosp-gcc-4.9" ]; then
             echo "Setting up official Google AOSP GCC 4.9 toolchain (Android Pie)..."
             mkdir -p $HOME/toolchain/aarch64 $HOME/toolchain/arm32
-            curl -sSL "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/pie-release.tar.gz" | tar -xz -C $HOME/toolchain/aarch64
-            curl -sSL "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/pie-release.tar.gz" | tar -xz -C $HOME/toolchain/arm32
+            curl --connect-timeout 20 --max-time 180 --retry 3 -fsSL "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/pie-release.tar.gz" -o /tmp/aarch64-tc.tar.gz
+            tar -xzf /tmp/aarch64-tc.tar.gz -C $HOME/toolchain/aarch64
+            rm -f /tmp/aarch64-tc.tar.gz
+
+            curl --connect-timeout 20 --max-time 180 --retry 3 -fsSL "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/pie-release.tar.gz" -o /tmp/arm32-tc.tar.gz
+            tar -xzf /tmp/arm32-tc.tar.gz -C $HOME/toolchain/arm32
+            rm -f /tmp/arm32-tc.tar.gz
+
             echo "[OK] AOSP GCC 4.9 toolchain installed."
           fi
 
