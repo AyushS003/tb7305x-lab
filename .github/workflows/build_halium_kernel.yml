@@ -12,7 +12,7 @@ on:
         description: 'Kernel Git Branch'
         required: true
         type: string
-        default: 'master'
+        default: '4.4.146'
       compiler_type:
         description: 'Cross-Compiler Toolchain'
         required: true
@@ -67,8 +67,14 @@ jobs:
 
       - name: 5. Clone MediaTek 4.4 Kernel Source
         run: |
-          echo "Cloning kernel tree from ${{ github.event.inputs.kernel_repo }} (branch: ${{ github.event.inputs.kernel_branch }})..."
-          git clone --depth 1 -b "${{ github.event.inputs.kernel_branch }}" "${{ github.event.inputs.kernel_repo }}" kernel_src
+          BRANCH="${{ github.event.inputs.kernel_branch }}"
+          REPO="${{ github.event.inputs.kernel_repo }}"
+          echo "Cloning kernel tree from $REPO (branch: $BRANCH)..."
+          if [ -n "$BRANCH" ]; then
+            git clone --depth 1 -b "$BRANCH" "$REPO" kernel_src || git clone --depth 1 "$REPO" kernel_src
+          else
+            git clone --depth 1 "$REPO" kernel_src
+          fi
 
       - name: 6. Inject Halium Defconfig
         run: |
