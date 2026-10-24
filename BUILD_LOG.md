@@ -413,3 +413,43 @@ Live analysis via root ADB shell and `logcat` revealed two critical blockers in 
      Swap:            2047 MB
      init.svc.init_perf: stopped (status 0)
      ```
+
+---
+
+## 18. Maximum Smoothness & Responsiveness Optimizations
+
+1. **Flash Storage (eMMC) I/O Subsystem Optimization**:
+   - **I/O Scheduler Switch (`deadline`)**:
+     - Switched all block queues (`/sys/block/mmcblk*/queue/scheduler`) from `cfq` (Completely Fair Queuing) to `deadline`.
+     - `cfq` is designed for spinning magnetic hard disks with rotational seek penalties. For solid-state eMMC flash, `deadline` eliminates dispatch latency and prevents I/O request starvation.
+   - **Read-Ahead Cache Expansion (`512 KB`)**:
+     - Increased read-ahead from 128 KB to 512 KB (`/sys/block/mmcblk*/queue/read_ahead_kb`), boosting sequential read throughput for loading APKs, DEX files, and graphical assets into memory.
+   - **Entropy & Accounting Overhead Removal**:
+     - Disabled block entropy harvesting (`add_random = 0`) and disk accounting overhead (`iostats = 0`), freeing CPU cycles during flash read/write operations.
+
+2. **Ahead-of-Time (AOT) Full Machine Code (`speed`) Compilation**:
+   - Default Android Pie first-boot uses the `quicken` interpreter profile, forcing the low-power 4x Cortex-A53 CPU to perform JIT compilation in memory during app execution, resulting in frame drops, micro-stutters, and laggy UI transitions.
+   - Forced native 64-bit ARM machine code compilation for core system components:
+     - `SystemUI` (`com.android.systemui`): Compiled to `speed` ELF/OAT native binary.
+     - `Settings` (`com.android.settings`): Compiled to `speed` native binary.
+     - `Launcher3` (`com.android.launcher3`): Compiled to `speed` native binary.
+   - **Result**: Zero runtime interpreter overhead, zero background JIT compiler thread contention, and immediate 60fps app transitions.
+
+3. **SurfaceFlinger & GPU Hardware Composition**:
+   - `debug.sf.hw = 1`: Enforces hardware composition across all display layers via PowerVR Rogue GE8100.
+   - `debug.egl.hw = 1`: Hardware-accelerated 2D/3D rendering.
+   - `debug.sf.latch_unsignaled = 1`: Reduces SurfaceFlinger frame latch latency.
+   - `persist.sys.use_dithering = 0`: Disables CPU software dithering on 16/32-bit graphics buffers.
+   - `video.accelerate.hw = 1`: Hardware-accelerated video decode pipelines.
+
+4. **Touchscreen Latency & Scroll Responsiveness**:
+   - `view.touch_slop = 8`: Lowers the minimum movement threshold to register a touch/scroll event, making the touchscreen respond immediately to subtle finger movement.
+   - `view.scroll_friction = 0.005`: Provides silky, fluid momentum scrolling with reduced deceleration drag.
+
+5. **Disabling MediaTek Background Debug Bloatware**:
+   - Deactivated MediaTek Android Error Engine (`aee_aedv` and `aee_aedv64`):
+     - `setprop ctl.stop aee_aedv`
+     - `setprop ctl.stop aee_aedv64`
+     - `setprop persist.vendor.aev.enable 0`
+     - `setprop persist.vendor.aeev.core.direct disable`
+   - Reclaimed background CPU cycles and memory previously consumed by minidump monitoring.
