@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <!-- Remote Repositories -->
+  <remote name="github" fetch="https://github.com" />
+  <remote name="halium" fetch="https://github.com/Halium" />
+  <remote name="lineage" fetch="https://github.com/LineageOS" />
+  <remote name="ayush" fetch="https://github.com/AyushS003" />
+
+  <!-- Device, Vendor & Kernel Trees for Lenovo Tab M7 (TB-7305X) -->
+  <project path="device/lenovo/mt8765_P" name="AyushS003/tb7305x-lab" remote="github" revision="main">
+    <copyfile src="source/rom/device/lenovo/mt8765_P/halium_mt8765_P.mk" dest="device/lenovo/mt8765_P/halium.mk" />
+  </project>
+
+  <!-- Halium Core Packages & Overlays -->
+  <project path="halium/gsi" name="halium/gsi" remote="github" revision="halium-9.0" />
+  
+</manifest>
