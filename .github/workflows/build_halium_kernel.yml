@@ -119,11 +119,17 @@ jobs:
 
           # MediaTek MT6739 / MT8765 Platform Includes & Driver Fixes
           echo "export MTK_PLATFORM := mt6739" >> Makefile
-          echo "KBUILD_CFLAGS += -w -Wno-error -I\$(srctree)/drivers/mmc/host/mediatek/ComboA -I\$(srctree)/drivers/mmc/host/mediatek/ComboA/mt6739 -I\$(srctree)/drivers/misc/mediatek/base/power/spm_v4 -I\$(srctree)/drivers/misc/mediatek/base/power/ppm_v3/src/mach/mt6739 -I\$(srctree)/drivers/misc/mediatek/base/power/ppm_v3/inc -I\$(srctree)/drivers/misc/mediatek/base/power/include -I\$(srctree)/drivers/misc/mediatek/cmdq/v3 -I\$(srctree)/drivers/misc/mediatek/cmdq/v3/mt6739 -I\$(srctree)/drivers/misc/mediatek/eccci -I\$(srctree)/drivers/misc/mediatek/eccci/mt6739 -I\$(srctree)/drivers/power/mediatek/battery -I\$(srctree)/drivers/power/mediatek/charger -I\$(srctree)/drivers/power/mediatek/misc -I\$(srctree)/drivers/misc/mediatek/include/mt-plat/mt6739/include -I\$(srctree)/drivers/misc/mediatek/include/mt-plat" >> Makefile
+          echo "KBUILD_CFLAGS += -w -Wno-error -I\$(srctree)/drivers/mmc/host/mediatek/ComboA -I\$(srctree)/drivers/mmc/host/mediatek/ComboA/mt6739 -I\$(srctree)/drivers/misc/mediatek/base/power/spm_v4 -I\$(srctree)/drivers/misc/mediatek/base/power/ppm_v3/src/mach/mt6739 -I\$(srctree)/drivers/misc/mediatek/base/power/ppm_v3/inc -I\$(srctree)/drivers/misc/mediatek/base/power/include -I\$(srctree)/drivers/misc/mediatek/cmdq/v3 -I\$(srctree)/drivers/misc/mediatek/cmdq/v3/mt6739 -I\$(srctree)/drivers/misc/mediatek/eccci -I\$(srctree)/drivers/misc/mediatek/eccci/mt6739 -I\$(srctree)/drivers/misc/mediatek/eccci/hif -I\$(srctree)/drivers/power/mediatek/battery -I\$(srctree)/drivers/power/mediatek/charger -I\$(srctree)/drivers/power/mediatek/misc -I\$(srctree)/drivers/misc/mediatek/include/mt-plat/mt6739/include -I\$(srctree)/drivers/misc/mediatek/include/mt-plat" >> Makefile
 
           # Fix quoted $(CONFIG_MTK_PLATFORM) inside ppm_v3 Makefile
           if [ -f "drivers/misc/mediatek/base/power/ppm_v3/src/Makefile" ]; then
             sed -i 's/\$(CONFIG_MTK_PLATFORM)/mt6739/g' drivers/misc/mediatek/base/power/ppm_v3/src/Makefile || true
+          fi
+
+          # Fix tracepoint include for eccci hif cldma
+          if [ -f "drivers/misc/mediatek/eccci/hif/Makefile" ]; then
+            echo "CFLAGS_ccci_hif_cldma.o := -I\$(src)" >> drivers/misc/mediatek/eccci/hif/Makefile
+            echo "ccflags-y += -I\$(srctree)/drivers/misc/mediatek/eccci/hif" >> drivers/misc/mediatek/eccci/hif/Makefile
           fi
 
           echo "Configuring kernel with mt8765_halium_defconfig..."
