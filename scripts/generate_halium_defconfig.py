@@ -9,7 +9,8 @@ import os
 import sys
 
 BASE_CONFIG = sys.argv[1] if len(sys.argv) > 1 else (
-    r"scratch/k39tv1_64_bsp_defconfig" if os.path.exists("scratch/k39tv1_64_bsp_defconfig")
+    r"scratch/mlm_mt8765_P_defconfig" if os.path.exists("scratch/mlm_mt8765_P_defconfig")
+    else r"scratch/kernel_config.txt" if os.path.exists("scratch/kernel_config.txt")
     else r"source/rom/device/lenovo/mt8765_P/halium_defconfig"
 )
 OUTPUT_DEFCONFIG = sys.argv[2] if len(sys.argv) > 2 else r"source/rom/device/lenovo/mt8765_P/halium_defconfig"
@@ -54,9 +55,25 @@ MANDATORY_HALIUM_CONFIGS = {
     "CONFIG_TMPFS_POSIX_ACL": "y",
     "CONFIG_TMPFS_XATTR": "y",
 
-    # Virtual Terminal / Console (Lomiri & debug)
+    # Virtual Terminal / Framebuffer Console (Lomiri & early boot display)
     "CONFIG_VT": "y",
     "CONFIG_VT_CONSOLE": "y",
+    "CONFIG_FRAMEBUFFER_CONSOLE": "y",
+    "CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY": "y",
+    "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION": "y",
+    "CONFIG_FB": "y",
+    "CONFIG_FB_CMDLINE": "y",
+    "CONFIG_FB_CFB_FILLRECT": "y",
+    "CONFIG_FB_CFB_COPYAREA": "y",
+    "CONFIG_FB_CFB_IMAGEBLIT": "y",
+    "CONFIG_FB_SYS_FILLRECT": "y",
+    "CONFIG_FB_SYS_COPYAREA": "y",
+    "CONFIG_FB_SYS_IMAGEBLIT": "y",
+    "CONFIG_FB_SYS_FOPS": "y",
+    "CONFIG_DRM": "y",
+    "CONFIG_DRM_KMS_FB_HELPER": "y",
+    "CONFIG_DRM_FBDEV_EMULATION": "y",
+    "CONFIG_LOGO": "y",
 
     # Kernel Inspection & Debugging
     "CONFIG_IKCONFIG": "y",

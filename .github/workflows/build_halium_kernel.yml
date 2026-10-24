@@ -7,12 +7,12 @@ on:
         description: 'MediaTek 4.4 Kernel Git Repository'
         required: true
         type: string
-        default: 'https://github.com/Hadenix/android_kernel_alps-4.4'
+        default: 'https://github.com/mlm-games/android_kernel_lenovo_mt8765_P'
       kernel_branch:
         description: 'Kernel Git Branch'
         required: true
         type: string
-        default: '4.4.146'
+        default: 'main'
       compiler_type:
         description: 'Cross-Compiler Toolchain'
         required: true
@@ -176,7 +176,7 @@ jobs:
           echo "Initrd size: $(stat -c%s out_halium/initrd.img) bytes"
 
           # Stage Halium bootcmdline
-          CMDLINE="bootopt=64S3,32N2,64N2 buildvariant=userdebug systemd.unified_cgroup_hierarchy=0 console=tty0 console=ttyMT0,921600n1 androidboot.selinux=permissive"
+          CMDLINE="bootopt=64S3,32N2,64N2 buildvariant=userdebug systemd.unified_cgroup_hierarchy=0 console=tty0 console=ttyMT0,921600n1 androidboot.selinux=permissive androidboot.dtbo_idx=0"
 
           DTBO_FLAG=""
           if [ -f "source/rom/device/lenovo/mt8765_P/prebuilts/dtbo.img" ]; then
