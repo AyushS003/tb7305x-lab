@@ -117,18 +117,8 @@ jobs:
             sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' scripts/dtc/dtc-lexer-lex.c || true
           fi
 
-          # Disable -Werror flags cleanly across Makefiles and Kbuild
-          python3 -c "
-          import glob, re
-          for f in glob.glob('**/Makefile*', recursive=True) + glob.glob('**/Kbuild*', recursive=True):
-              try:
-                  with open(f, 'r', encoding='utf-8', errors='ignore') as fp: c = fp.read()
-                  c = c.replace('-Werror-implicit-function-declaration', '-Wno-implicit-function-declaration')
-                  c = re.sub(r'-Werror=[^\s]+', '', c)
-                  c = re.sub(r'-Werror\b', '', c)
-                  with open(f, 'w', encoding='utf-8') as fp: fp.write(c)
-              except Exception: pass
-          "
+          # Suppress warning escalation cleanly by appending -w -Wno-error to KBUILD_CFLAGS
+          echo "KBUILD_CFLAGS += -w -Wno-error" >> Makefile
 
           echo "Configuring kernel with mt8765_halium_defconfig..."
           make HOSTCFLAGS="-fcommon" mt8765_halium_defconfig
