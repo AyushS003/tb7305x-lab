@@ -1,0 +1,86 @@
+================================================================================
+  LENOVO TAB M7 (TB-7305X) - HALIUM 9.0 (UBUNTU TOUCH BASE) INSTRUCTIONS
+================================================================================
+
+Target Device: Lenovo Tab M7 (TB-7305X / MediaTek MT8765 / MT6739)
+Target OS:     Halium 9.0 (Ubuntu Touch 20.04 Focal / Lomiri Container)
+Kernel Build:  Linux 4.4.146 64-bit (Google AOSP GCC 4.9)
+Release Type:  Development Bringup Image (Container & Systemd Certified)
+
+--------------------------------------------------------------------------------
+PART 1: ZERO-RISK LIVE TEST (RECOMMENDED FIRST STEP)
+--------------------------------------------------------------------------------
+You can test the Halium 9 kernel directly in RAM without overwriting your 
+installed LineageOS 16.0 or stock boot partition!
+
+1. Boot your tablet into FASTBOOT mode:
+   - Power off the tablet completely.
+   - Hold [Volume Down] + [Power] until "FASTBOOT mode..." appears on screen.
+   - Connect the tablet to your PC via USB cable.
+
+2. Run the Live Boot Script:
+   - On Windows: Double-click "boot_halium.bat"
+   - On Linux/macOS: Run "chmod +x boot_halium.sh && ./boot_halium.sh"
+
+3. Manual command (alternative):
+   fastboot boot halium-boot.img
+
+4. To exit live mode and return to LineageOS:
+   - Hold [Power] for 10 seconds to reboot normally. Your tablet will boot
+     straight back into LineageOS with all your data untouched.
+
+--------------------------------------------------------------------------------
+PART 2: INTERACTIVE HALIUM SHELL (TELNET ACCESS)
+--------------------------------------------------------------------------------
+When Halium boots, the initramfs starts a USB Ethernet gadget (RNDIS/CDC-ECM).
+This allows full command-line access to the device before the GUI loads.
+
+1. On your PC, open Network Connections:
+   - A new USB Ethernet adapter will appear.
+   - Configure its IPv4 settings manually:
+       IP Address:  192.168.2.1
+       Subnet Mask: 255.255.255.0
+       Gateway:     (leave blank)
+
+2. Connect via Telnet:
+   - Windows Command Prompt / PowerShell:
+       telnet 192.168.2.15
+   - Linux / macOS:
+       telnet 192.168.2.15
+
+   (If Windows says 'telnet' is not recognized, enable it in 
+    "Turn Windows features on or off" -> "Telnet Client", or use PuTTY)
+
+3. Useful Commands inside Halium initramfs shell:
+   - Check kernel ring buffer:
+       dmesg | tail -n 100
+   - Check device partitions:
+       ls -la /dev/block/by-name/
+   - Check mounts and cgroups:
+       cat /proc/cgroups
+       cat /proc/filesystems
+   - Check CPU and memory info:
+       cat /proc/cpuinfo
+       cat /proc/meminfo
+
+--------------------------------------------------------------------------------
+PART 3: PERMANENT FLASHING (OPTIONAL)
+--------------------------------------------------------------------------------
+Only flash permanently once you have verified the live test boots cleanly.
+
+1. Boot tablet into Fastboot mode.
+2. Run "flash_halium_boot.bat" (Windows) or "./flash_halium_boot.sh" (Linux).
+3. Manual command:
+   fastboot flash boot halium-boot.img
+   fastboot reboot
+
+To revert back to LineageOS later:
+   fastboot flash boot ..\LineageOS-16.0-TB-7305X\boot.img
+   fastboot reboot
+
+--------------------------------------------------------------------------------
+CHECKSUMS
+--------------------------------------------------------------------------------
+Verify with MD5SUMS.txt or SHA256SUMS.txt before flashing:
+  MD5 (halium-boot.img) = 79faf6b804874d819308452d2d399202
+================================================================================
