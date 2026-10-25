@@ -156,18 +156,25 @@ jobs:
           KERNEL_BIN=""
           if [ -f "kernel_src/arch/arm64/boot/Image.gz-dtb" ]; then
             KERNEL_BIN="kernel_src/arch/arm64/boot/Image.gz-dtb"
+            cp "$KERNEL_BIN" out_halium/Image
+          elif [ -f "kernel_src/arch/arm64/boot/Image.gz" ] && [ -f "kernel_src/arch/arm64/boot/dts/mediatek/mt6739.dtb" ]; then
+            echo "Appending mt6739.dtb to Image.gz..."
+            cat kernel_src/arch/arm64/boot/Image.gz kernel_src/arch/arm64/boot/dts/mediatek/mt6739.dtb > out_halium/Image
+            KERNEL_BIN="out_halium/Image"
           elif [ -f "kernel_src/arch/arm64/boot/Image.gz" ]; then
             KERNEL_BIN="kernel_src/arch/arm64/boot/Image.gz"
+            cp "$KERNEL_BIN" out_halium/Image
           elif [ -f "kernel_src/arch/arm64/boot/Image" ]; then
             KERNEL_BIN="kernel_src/arch/arm64/boot/Image"
+            cp "$KERNEL_BIN" out_halium/Image
           fi
 
-          if [ -z "$KERNEL_BIN" ]; then
+          if [ ! -f "out_halium/Image" ]; then
             echo "[ERROR] Kernel binary not found in arch/arm64/boot/!"
             exit 1
           fi
 
-          cp "$KERNEL_BIN" out_halium/Image
+          KERNEL_BIN="out_halium/Image"
           echo "Found kernel binary at: $KERNEL_BIN ($(stat -c%s $KERNEL_BIN) bytes)"
 
           # Download official Halium 9 continuous arm64 initrd

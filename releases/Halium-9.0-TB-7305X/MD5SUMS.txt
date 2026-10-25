@@ -1,1 +1,1 @@
-8ca2d87293e9318b81fcfdf4828d8682  halium-boot.img
+048ce5fe6cc62e9eca50518f01052e61  halium-boot.img

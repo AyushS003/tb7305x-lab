@@ -1,1 +1,1 @@
-7f564261e3119a0fc802c93b5fc022b4efaddf6884b988ce4e508553fe752a14  halium-boot.img
+cefdc5ea33e1fa69a92da44b58c8296d7dbac660ee51e29780aea40a77f05d69  halium-boot.img
