@@ -139,6 +139,13 @@ jobs:
             sed -i 's|#include "../fstb/fstb.h"|#include "../../fstb/fstb.h"|' drivers/misc/mediatek/performance/fpsgo/fbt/src/fbt_cpu.c 2>/dev/null || true
           fi
 
+          # Neutralize skip_initramfs so MTK bootloader cannot bypass Halium initramfs
+          if [ -f "init/initramfs.c" ]; then
+            sed -i 's/do_skip_initramfs = 1;/do_skip_initramfs = 0;/' init/initramfs.c || true
+            sed -i 's/__setup("skip_initramfs", skip_initramfs_param);/\/\/ skip_initramfs disabled for Halium/' init/initramfs.c || true
+            echo "[OK] Neutralized skip_initramfs in init/initramfs.c"
+          fi
+
           echo "Configuring kernel with mt8765_halium_defconfig..."
           make HOSTCFLAGS="-fcommon" mt8765_halium_defconfig
 
@@ -181,6 +188,43 @@ jobs:
           echo "Downloading Halium 9 arm64 continuous initrd..."
           curl -sSL -o out_halium/initrd.img https://github.com/Halium/initramfs-tools-halium/releases/download/continuous/initrd.img-touch-arm64
           echo "Initrd size: $(stat -c%s out_halium/initrd.img) bytes"
+
+          # Patch scripts/halium inside initrd to force BOOT_MODE=halium (prevent boot_reason=4 fallback to android)
+          python3 -c "
+          import gzip
+          with open('out_halium/initrd.img', 'rb') as f:
+              data = gzip.decompress(f.read())
+          pos, entries = 0, []
+          while pos < len(data) - 110:
+              magic = data[pos:pos+6]
+              if magic not in (b'070701', b'070702'):
+                  break
+              hdr = data[pos:pos+110]
+              nsize = int(hdr[94:102], 16)
+              fsize = int(hdr[54:62], 16)
+              pos += 110
+              name_b = data[pos:pos+nsize]
+              pos += nsize + ((4 - ((110 + nsize) % 4)) % 4)
+              content = data[pos:pos+fsize]
+              pos += fsize + ((4 - (fsize % 4)) % 4)
+              name = name_b[:-1].decode('utf-8', errors='ignore')
+              if name == 'scripts/halium':
+                  txt = content.decode('utf-8', errors='ignore')
+                  txt = txt.replace('identify_boot_mode() {', 'identify_boot_mode() {\n\tBOOT_MODE=\'halium\'\n\ttell_kmsg \"boot mode forced to halium\"\n\treturn 0')
+                  content = txt.encode('utf-8')
+                  hdr = bytearray(hdr)
+                  hdr[54:62] = f'{len(content):08X}'.encode('ascii')
+                  hdr = bytes(hdr)
+              entries.append((hdr, name_b, content))
+          out = bytearray()
+          for h, nb, cnt in entries:
+              out.extend(h + nb + b'\x00' * ((4 - ((110 + len(nb)) % 4)) % 4) + cnt + b'\x00' * ((4 - (len(cnt) % 4)) % 4))
+          if len(out) % 512 != 0:
+              out.extend(b'\x00' * (512 - (len(out) % 512)))
+          with open('out_halium/initrd.img', 'wb') as f:
+              f.write(gzip.compress(bytes(out), compresslevel=9))
+          print('[OK] Patched scripts/halium inside initrd.img to force BOOT_MODE=halium')
+          "
 
           # Stage Halium bootcmdline
           CMDLINE="bootopt=64S3,32N2,64N2 buildvariant=userdebug systemd.unified_cgroup_hierarchy=0 console=tty0 console=ttyMT0,921600n1 androidboot.selinux=permissive androidboot.dtbo_idx=0"

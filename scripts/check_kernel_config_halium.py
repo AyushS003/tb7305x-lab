@@ -18,13 +18,16 @@ REQUIRED_CONFIGS = {
     "CONFIG_SECCOMP": "y",
     "CONFIG_SECCOMP_FILTER": "y",
     
-    # Namespaces (Mandatory for LXC Android container)
+    # Namespaces & IPC (Mandatory for LXC Android container)
     "CONFIG_NAMESPACES": "y",
+    "CONFIG_SYSVIPC": "y",
+    "CONFIG_POSIX_MQUEUE": "y",
     "CONFIG_UTS_NS": "y",
     "CONFIG_IPC_NS": "y",
     "CONFIG_USER_NS": "y",
     "CONFIG_PID_NS": "y",
     "CONFIG_NET_NS": "y",
+    "CONFIG_DEVPTS_MULTIPLE_INSTANCES": "y",
 
     # Cgroups
     "CONFIG_CGROUPS": "y",
