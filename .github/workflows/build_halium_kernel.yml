@@ -160,25 +160,30 @@ jobs:
       - name: 8. Package Halium Boot Image (halium-boot.img)
         run: |
           mkdir -p out_halium
-          KERNEL_BIN=""
-          if [ -f "kernel_src/arch/arm64/boot/Image.gz-dtb" ]; then
-            KERNEL_BIN="kernel_src/arch/arm64/boot/Image.gz-dtb"
-            cp "$KERNEL_BIN" out_halium/Image
-          elif [ -f "kernel_src/arch/arm64/boot/Image.gz" ] && [ -f "kernel_src/arch/arm64/boot/dts/mediatek/mt6739.dtb" ]; then
-            echo "Appending mt6739.dtb to Image.gz..."
-            cat kernel_src/arch/arm64/boot/Image.gz kernel_src/arch/arm64/boot/dts/mediatek/mt6739.dtb > out_halium/Image
-            KERNEL_BIN="out_halium/Image"
-          elif [ -f "kernel_src/arch/arm64/boot/Image.gz" ]; then
-            KERNEL_BIN="kernel_src/arch/arm64/boot/Image.gz"
-            cp "$KERNEL_BIN" out_halium/Image
+          KERNEL_BASE=""
+          if [ -f "kernel_src/arch/arm64/boot/Image.gz" ]; then
+            KERNEL_BASE="kernel_src/arch/arm64/boot/Image.gz"
           elif [ -f "kernel_src/arch/arm64/boot/Image" ]; then
-            KERNEL_BIN="kernel_src/arch/arm64/boot/Image"
-            cp "$KERNEL_BIN" out_halium/Image
+            KERNEL_BASE="kernel_src/arch/arm64/boot/Image"
           fi
 
-          if [ ! -f "out_halium/Image" ]; then
+          if [ -z "$KERNEL_BASE" ]; then
             echo "[ERROR] Kernel binary not found in arch/arm64/boot/!"
             exit 1
+          fi
+
+          DTB_SRC=""
+          if [ -f "kernel_src/arch/arm64/boot/dts/mediatek/mt6739.dtb" ]; then
+            DTB_SRC="kernel_src/arch/arm64/boot/dts/mediatek/mt6739.dtb"
+          elif [ -f "source/rom/device/lenovo/mt8765_P/prebuilts/mt8765.dtb" ]; then
+            DTB_SRC="source/rom/device/lenovo/mt8765_P/prebuilts/mt8765.dtb"
+          fi
+
+          if [ -n "$DTB_SRC" ]; then
+            echo "Appending DTB ($DTB_SRC, $(stat -c%s $DTB_SRC) bytes) to $KERNEL_BASE..."
+            cat "$KERNEL_BASE" "$DTB_SRC" > out_halium/Image
+          else
+            cp "$KERNEL_BASE" out_halium/Image
           fi
 
           KERNEL_BIN="out_halium/Image"
